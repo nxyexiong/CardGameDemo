@@ -1,16 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
-using Networking;
 using UnityEngine;
 using UnityEngine.UI;
+using Networking;
 
 public class GameplayController : MonoBehaviour
 {
     private enum GameState
     {
         Start,
+        WaitingForHandshake,
         WaitingForServer,
         WaitingForAction,
         GameOver,
@@ -55,25 +55,47 @@ public class GameplayController : MonoBehaviour
     public Transform MainHandTransform;
     public Transform ActionTransform;
 
-    private Networking.Client _client;
+    private string _profileId = string.Empty;
+    private string _name = string.Empty;
+    private Client _client;
     private long _tsDelta = 0; // server time - local time
-    private Networking.GameStateInfo _localGameStateInfo = new();
+    private GameStateInfo _localGameStateInfo = new();
     private GameState _gameState = GameState.Start;
     private readonly List<GameObject> _mainHandCards = new(); // card objects
     private readonly List<GameObject> _actions = new(); // action button objects
 
     void Start()
     {
+        // TODO: profile id
+        _profileId = PlayerPrefs.GetString("PlayerName") ?? string.Empty;
+        _name = PlayerPrefs.GetString("PlayerName") ?? string.Empty;
+
         // init client
-        _client = GetComponent<Networking.Client>();
+        _client = GetComponent<Client>();
         _client.SetListener((UpdateGameStateRequest r) => OnUpdateGameStateRequest(r));
 
         // next state
-        _gameState = GameState.WaitingForServer;
+        _gameState = GameState.Start;
     }
 
     void Update()
     {
+        if (_gameState == GameState.Start)
+        {
+            var request = new HandshakeRequest { profileId = _profileId, name = _name };
+            _ = _client.SendRequest(request, (HandshakeResponse response) =>
+            {
+                if (response == null || !response.success)
+                {
+                    Debug.LogError($"HandshakeResponse is null or not success: " +
+                        $"{response?.success.ToString() ?? "null"}");
+                    _gameState = GameState.Start;
+                    return;
+                }
+                _gameState = GameState.WaitingForServer;
+            });
+            _gameState = GameState.WaitingForHandshake;
+        }
     }
 
     void OnDestroy()
@@ -86,83 +108,85 @@ public class GameplayController : MonoBehaviour
         if (_gameState == GameState.WaitingForServer)
         {
             // sync time
-            _tsDelta = request.ServerTimestampMs - Common.TimeUtils.GetTimestampMs(DateTime.Now);
+            _tsDelta = request.serverTimestampMs - Common.TimeUtils.GetTimestampMs(DateTime.Now);
 
             // update game state
-            _localGameStateInfo.ApplyDelta(request.GameStateInfoDelta);
+            _localGameStateInfo.ApplyDelta(request.gameStateInfoDelta);
             UpdateGameState();
 
             // update action list
-            UpdateActionList(request.AvailableActions);
+            UpdateActionList(request.availableActions);
 
             // next state
-            if (request.AvailableActions.Count > 0)
+            if (request.availableActions.Count > 0)
                 _gameState = GameState.WaitingForAction;
+
+            return new UpdateGameStateResponse { success = true };
         }
         else
         {
             Debug.LogError($"OnUpdateGameStateRequest, " +
                 $"unknown request {request.GetType().FullName} for state {_gameState}");
-        }
 
-        return new UpdateGameStateResponse();
+            return new UpdateGameStateResponse { success = false };
+        }
     }
 
     private void UpdateGameState()
     {
         // set global state
-        DealerText.text = _localGameStateInfo.PlayerInfos[_localGameStateInfo.Dealer].Name;
-        AggressorText.text = _localGameStateInfo.PlayerInfos[_localGameStateInfo.Aggressor].Name;
-        ActivePlayerText.text = _localGameStateInfo.PlayerInfos[_localGameStateInfo.ActivePlayer].Name;
+        DealerText.text = _localGameStateInfo.playerInfos[_localGameStateInfo.dealer].name;
+        AggressorText.text = _localGameStateInfo.playerInfos[_localGameStateInfo.aggressor].name;
+        ActivePlayerText.text = _localGameStateInfo.playerInfos[_localGameStateInfo.activePlayer].name;
         SetTimer();
 
         // sort players
-        var playerCount = _localGameStateInfo.PlayerInfos.Count;
-        var playerInfos = new List<Networking.PlayerInfo>();
-        var curId = _localGameStateInfo.PlayerId;
+        var playerCount = _localGameStateInfo.playerInfos.Count;
+        var playerInfos = new List<PlayerInfo>();
+        var curId = _localGameStateInfo.playerId;
         for (var i = 0; i < playerCount; i++)
         {
-            var playerInfo = _localGameStateInfo.PlayerInfos[curId++ % playerCount];
+            var playerInfo = _localGameStateInfo.playerInfos[curId++ % playerCount];
             playerInfos.Add(playerInfo);
         }
 
         // set player state
         if (playerInfos.Count > 0)
         {
-            Player0NameText.text = playerInfos[0].Name;
-            Player0NetWorthText.text = playerInfos[0].NetWorth.ToString();
-            Player0BetText.text = playerInfos[0].Bet.ToString();
-            Player0IsFoldedText.text = playerInfos[0].IsFolded.ToString();
-            UpdateMainHand(playerInfos[0].MainHand);
+            Player0NameText.text = playerInfos[0].name;
+            Player0NetWorthText.text = playerInfos[0].netWorth.ToString();
+            Player0BetText.text = playerInfos[0].bet.ToString();
+            Player0IsFoldedText.text = playerInfos[0].isFolded.ToString();
+            UpdateMainHand(playerInfos[0].mainHand);
         }
         if (playerInfos.Count > 1)
         {
-            Player1NameText.text = playerInfos[1].Name;
-            Player1NetWorthText.text = playerInfos[1].NetWorth.ToString();
-            Player1BetText.text = playerInfos[1].Bet.ToString();
-            Player1IsFoldedText.text = playerInfos[1].IsFolded.ToString();
+            Player1NameText.text = playerInfos[1].name;
+            Player1NetWorthText.text = playerInfos[1].netWorth.ToString();
+            Player1BetText.text = playerInfos[1].bet.ToString();
+            Player1IsFoldedText.text = playerInfos[1].isFolded.ToString();
         }
         if (playerInfos.Count > 2)
         {
-            Player2NameText.text = playerInfos[2].Name;
-            Player2NetWorthText.text = playerInfos[2].NetWorth.ToString();
-            Player2BetText.text = playerInfos[2].Bet.ToString();
-            Player2IsFoldedText.text = playerInfos[2].IsFolded.ToString();
+            Player2NameText.text = playerInfos[2].name;
+            Player2NetWorthText.text = playerInfos[2].netWorth.ToString();
+            Player2BetText.text = playerInfos[2].bet.ToString();
+            Player2IsFoldedText.text = playerInfos[2].isFolded.ToString();
         }
         if (playerInfos.Count > 3)
         {
-            Player3NameText.text = playerInfos[3].Name;
-            Player3NetWorthText.text = playerInfos[3].NetWorth.ToString();
-            Player3BetText.text = playerInfos[3].Bet.ToString();
-            Player3IsFoldedText.text = playerInfos[3].IsFolded.ToString();
+            Player3NameText.text = playerInfos[3].name;
+            Player3NetWorthText.text = playerInfos[3].netWorth.ToString();
+            Player3BetText.text = playerInfos[3].bet.ToString();
+            Player3IsFoldedText.text = playerInfos[3].isFolded.ToString();
         }
     }
 
     private void SetTimer()
     {
         var nowMs = Common.TimeUtils.GetTimestampMs(DateTime.Now);
-        var startTimeMs = _localGameStateInfo.TimerStartTimestampMs;
-        var intervalMs = _localGameStateInfo.TimerIntervalMs;
+        var startTimeMs = _localGameStateInfo.timerStartTimestampMs;
+        var intervalMs = _localGameStateInfo.timerIntervalMs;
         var timeLeftMs = startTimeMs + intervalMs - nowMs;
 
         if (timeLeftMs <= 0)
@@ -286,15 +310,21 @@ public class GameplayController : MonoBehaviour
         if (_gameState == GameState.WaitingForAction)
         {
             // build request
-            var request = new DoActionRequest { Action = action.ToString() };
+            var request = new DoActionRequest { action = action.ToString() };
             //if (action == Action.xxx)
             //{
             //    // fill data if needed
             //}
-            _client.Request<DoActionRequest, DoActionResponse>(request).ContinueWith((rspTask) =>
+            _client.SendRequest(request, (DoActionResponse response) =>
             {
-                OnActionComplete(action, data, rspTask.Result.Success);
-            }, TaskScheduler.FromCurrentSynchronizationContext());
+                if (response == null || !response.success)
+                {
+                    Debug.LogError($"DoAction, response is null or not success: " +
+                        $"{response?.success.ToString() ?? "null"}");
+                    return;
+                }
+                OnActionComplete(action, data);
+            });
         }
         else
         {
@@ -303,17 +333,9 @@ public class GameplayController : MonoBehaviour
         }
     }
 
-    private void OnActionComplete(Action action, string data, bool success)
+    private void OnActionComplete(Action action, string data)
     {
-        if (success)
-        {
-            _gameState = GameState.WaitingForServer;
-            UpdateActionList(new List<string>());
-        }
-        else
-        {
-            Debug.LogError($"OnActionComplete, " +
-                $"action denied {action}:{data} for state {_gameState}");
-        }
+        _gameState = GameState.WaitingForServer;
+        UpdateActionList(new List<string>());
     }
 }

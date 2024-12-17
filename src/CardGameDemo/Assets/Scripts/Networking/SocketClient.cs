@@ -19,8 +19,8 @@ namespace Networking
         private Socket _socket;
         private bool _isIpv6;
         private IPEndPoint _endPoint;
-        private readonly List<byte[]> _sendingQueue;
-        private readonly List<byte[]> _recvingQueue;
+        private readonly List<byte[]> _sendingQueue; // stores headers
+        private readonly List<byte[]> _recvingQueue; // doesnt store headers
 
         public SocketClient()
         {
@@ -112,7 +112,8 @@ namespace Networking
                     if (_socket.Poll(0, SelectMode.SelectWrite))
                     {
                         var data = _sendingQueue.FirstOrDefault();
-                        if (data != null)
+                        if (data != null) _sendingQueue.RemoveAt(0);
+                        if (data != null && data.Length > 0)
                         {
                             int w = _socket.Send(data);
                             if (w <= 0)
@@ -141,7 +142,10 @@ namespace Networking
 
         public void SendMsg(byte[] msg)
         {
-            _sendingQueue.Add(msg);
+            var header = new byte[2] { (byte)(msg.Length / 256), (byte)(msg.Length % 256) };
+            var dataList = msg.ToList();
+            dataList.InsertRange(0, header);
+            _sendingQueue.Add(dataList.ToArray());
         }
 
         public bool ReadMsg(out byte[] msg)

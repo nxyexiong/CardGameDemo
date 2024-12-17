@@ -1,7 +1,5 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using UnityEngine;
 
 
@@ -9,10 +7,14 @@ namespace Networking
 {
     public class Client : MonoBehaviour
     {
-        private Networking.SocketClient _socket = null;
+        private SocketClient _socket = null;
         private int _seq = 0;
-        private readonly Dictionary<int, TaskCompletionSource<string>> _c2sRspDict = new(); // seq -> tcs
-        private readonly Dictionary<string, Func<string, string>> _s2cHandlers = new(); // request type name -> internal callback
+
+        // seq -> internal callback (response)
+        private readonly Dictionary<int, Action<string>> _c2sHandlers = new();
+
+        // request type name -> internal callback (request -> response)
+        private readonly Dictionary<string, Func<string, string>> _s2cHandlers = new();
 
         void Start()
         {
@@ -41,13 +43,13 @@ namespace Networking
                 }
 
                 // handle request or response
-                if (s2cData.Type == S2CData.DataType.Request)
+                if (s2cData.type == S2CData.DataType.Request)
                 {
                     // parse request
-                    Networking.Request req;
+                    Request req;
                     try
                     {
-                        req = Networking.Request.From(s2cData.Data);
+                        req = Request.From(s2cData.data);
                     }
                     catch (Exception ex)
                     {
@@ -57,14 +59,14 @@ namespace Networking
 
                     // call request handler
                     var rspData = string.Empty;
-                    if (_s2cHandlers.TryGetValue(req.Type, out var handler))
-                        rspData = handler.Invoke(req.Data);
+                    if (_s2cHandlers.TryGetValue(req.type, out var handler))
+                        rspData = handler.Invoke(req.data);
 
                     // build response
                     C2SData c2sData;
                     try
                     {
-                        Networking.Response rsp = Networking.Response.Build(req.Seq, rspData);
+                        Response rsp = Response.Build(req.seq, rspData);
                         c2sData = C2SData.Build(C2SData.DataType.Response, rsp.RawData());
                     }
                     catch (Exception ex)
@@ -76,13 +78,13 @@ namespace Networking
                     // send data
                     _socket.SendMsg(System.Text.Encoding.UTF8.GetBytes(c2sData.RawData()));
                 }
-                else if (s2cData.Type == S2CData.DataType.Response)
+                else if (s2cData.type == S2CData.DataType.Response)
                 {
                     // build response
-                    Networking.Response rsp;
+                    Response rsp;
                     try
                     {
-                        rsp = Networking.Response.From(s2cData.Data);
+                        rsp = Response.From(s2cData.data);
                     }
                     catch (Exception ex)
                     {
@@ -91,8 +93,8 @@ namespace Networking
                     }
 
                     // notify
-                    if (_c2sRspDict.TryGetValue(rsp.Seq, out var tcs))
-                        tcs.SetResult(rsp.Data);
+                    if (_c2sHandlers.TryGetValue(rsp.seq, out var callback))
+                        callback.Invoke(rsp.data);
                 }
             }
         }
@@ -103,8 +105,9 @@ namespace Networking
             _socket = null;
         }
 
-        // return default if failed
-        public async Task<TResponse> Request<TRequest, TResponse>(TRequest request)
+        // must be called in main thread
+        // return false if sending is failed, callback gives default if failed
+        public bool SendRequest<TRequest, TResponse>(TRequest request, Action<TResponse> callback)
         {
             var seq = _seq++;
 
@@ -112,39 +115,46 @@ namespace Networking
             C2SData c2sData;
             try
             {
-                var data = Networking.Request.Build(seq, request);
+                var data = Request.Build(seq, request);
                 c2sData = C2SData.Build(C2SData.DataType.Request, data);
             }
             catch (Exception ex)
             {
                 Debug.Log($"Request, building C2SData failed: {ex}");
-                return default;
+                return false;
             }
 
-            // send and wait for response
-            var tcs = new TaskCompletionSource<string>();
-            _c2sRspDict[seq] = tcs;
+            // setup handler
+            _c2sHandlers[seq] = new Action<string>((rspRaw) =>
+            {
+                _c2sHandlers.Remove(seq);
+                if (string.IsNullOrEmpty(rspRaw))
+                {
+                    Debug.Log($"Request, response is null or empty");
+                    callback.Invoke(default);
+                    return;
+                }
+                TResponse response;
+                try
+                {
+                    response = JsonUtility.FromJson<TResponse>(rspRaw);
+                }
+                catch (Exception ex)
+                {
+                    Debug.Log($"Request, building TResponse failed: {ex}");
+                    callback.Invoke(default);
+                    return;
+                }
+                callback.Invoke(response);
+            });
+
+            // send
             _socket.SendMsg(System.Text.Encoding.UTF8.GetBytes(c2sData.RawData()));
-            var rspRaw = await tcs.Task;
-            _c2sRspDict.Remove(seq);
 
-            // parse response
-            if (string.IsNullOrEmpty(rspRaw))
-                return default;
-            TResponse response;
-            try
-            {
-                response = JsonUtility.FromJson<TResponse>(rspRaw);
-            }
-            catch (Exception ex)
-            {
-                Debug.Log($"Request, building TResponse failed: {ex}");
-                return default;
-            }
-
-            return response;
+            return true;
         }
 
+        // must be called in main thread
         public void SetListener<TRequest, TResponse>(Func<TRequest, TResponse> func)
         {
             _s2cHandlers[typeof(TRequest).FullName] = (string reqData) =>
@@ -180,6 +190,7 @@ namespace Networking
             };
         }
 
+        // must be called in main thread
         public void RemoveListener<TRequest>()
         {
             _s2cHandlers.Remove(typeof(TRequest).FullName);

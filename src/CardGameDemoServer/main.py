@@ -1,21 +1,17 @@
-import socket
+import time
+from game_server import GameServer
 
 
 def main():
-    pass
+    game_server = GameServer(profile_ids=['aaa', 'bbb', 'ccc', 'ddd'])
+    game_server.start()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print('[+] keyboard interrupt')
+    game_server.stop()
 
 
 if __name__ == '__main__':
     main()
-
-
-# test
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.bind(('', 8800))
-sock.listen()
-conn, addr = sock.accept()
-with conn:
-    print('connected')
-    while True:
-        conn.send(b'\x00\x04test')
-        #data = conn.recv(2048)

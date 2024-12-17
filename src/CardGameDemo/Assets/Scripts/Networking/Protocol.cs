@@ -5,6 +5,8 @@ using UnityEngine;
 
 namespace Networking
 {
+    // only public field or field marked as serializable can be convert to json
+
     [Serializable]
     public class C2SData
     {
@@ -14,12 +16,12 @@ namespace Networking
             Response = 1,
         }
 
-        public DataType Type { get; set; } = DataType.Request;
-        public string Data { get; set; } = string.Empty;
+        public DataType type = DataType.Request;
+        public string data = string.Empty;
 
         public static C2SData Build<T>(DataType type, T data)
         {
-            return new C2SData { Type = type, Data = JsonUtility.ToJson(data) };
+            return new C2SData { type = type, data = JsonUtility.ToJson(data) };
         }
 
         public string RawData()
@@ -37,8 +39,8 @@ namespace Networking
             Response = 1,
         }
 
-        public DataType Type { get; set; } = DataType.Request;
-        public string Data { get; set; } = string.Empty;
+        public DataType type = DataType.Request;
+        public string data = string.Empty;
 
         public static S2CData From(string rawData)
         {
@@ -47,31 +49,31 @@ namespace Networking
 
         public Request GetRequest()
         {
-            if (Type != DataType.Request) return null;
-            return Request.From(Data);
+            if (type != DataType.Request) return null;
+            return Request.From(data);
         }
 
         public Response GetResponse()
         {
-            if (Type != DataType.Response) return null;
-            return Response.From(Data);
+            if (type != DataType.Response) return null;
+            return Response.From(data);
         }
     }
 
     [Serializable]
     public class Request
     {
-        public int Seq { get; set; } = -1;
-        public string Type { get; set; } = string.Empty;
-        public string Data { get; set; } = string.Empty;
+        public int seq = -1;
+        public string type = string.Empty;
+        public string data = string.Empty;
 
         public static Request Build<T>(int seq, T data)
         {
             return new Request
             {
-                Seq = seq,
-                Type = typeof(T).FullName,
-                Data = JsonUtility.ToJson(data),
+                seq = seq,
+                type = typeof(T).FullName,
+                data = JsonUtility.ToJson(data),
             };
         }
 
@@ -89,15 +91,15 @@ namespace Networking
     [Serializable]
     public class Response
     {
-        public int Seq { get; set; } = -1;
-        public string Data { get; set; } = string.Empty;
+        public int seq = -1;
+        public string data = string.Empty;
 
         public static Response Build<T>(int seq, T data)
         {
             return new Response
             {
-                Seq = seq,
-                Data = JsonUtility.ToJson(data),
+                seq = seq,
+                data = JsonUtility.ToJson(data),
             };
         }
 
@@ -113,109 +115,123 @@ namespace Networking
     }
 
     [Serializable]
+    public class HandshakeRequest
+    {
+        public string profileId = string.Empty;
+        public string name = string.Empty;
+    }
+
+    [Serializable]
+    public class HandshakeResponse
+    {
+        public bool success = false;
+    }
+
+    [Serializable]
     public class UpdateGameStateRequest
     {
-        public long ServerTimestampMs { get; set; } = -1;
-        public GameStateInfo GameStateInfoDelta { get; set; } = new();
-        public Collection<string> AvailableActions { get; set; } = new();
+        public long serverTimestampMs = -1;
+        public GameStateInfo gameStateInfoDelta = new();
+        public Collection<string> availableActions = new();
     }
 
     [Serializable]
     public class GameStateInfo
     {
-        public bool IsPlayerIdChanged { get; set; } = false;
-        public int PlayerId { get; set; } = -1;
+        public bool isPlayerIdChanged = false;
+        public int playerId = -1;
 
-        public Collection<PlayerInfo> PlayerInfos { get; set; } = new();
+        public Collection<PlayerInfo> playerInfos = new();
 
-        public bool IsDealerChanged = false;
-        public int Dealer { get; set; } = -1;
+        public bool isDealerChanged = false;
+        public int dealer = -1;
 
-        public bool IsAggressorChanged = false;
-        public int Aggressor { get; set; } = -1;
+        public bool isAggressorChanged = false;
+        public int aggressor = -1;
 
-        public bool IsActivePlayerChanged = false;
-        public int ActivePlayer { get; set; } = -1;
+        public bool isActivePlayerChanged = false;
+        public int activePlayer = -1;
 
-        public bool IsTimerStartTimestampMsChanged { get; set; } = false;
-        public long TimerStartTimestampMs { get; set; } = -1;
+        public bool isTimerStartTimestampMsChanged = false;
+        public long timerStartTimestampMs = -1;
 
-        public bool IsTimerIntervalMsChanged { get; set; } = false;
-        public long TimerIntervalMs { get; set; } = -1;
+        public bool isTimerIntervalMsChanged = false;
+        public long timerIntervalMs = -1;
 
         public void ApplyDelta(GameStateInfo delta)
         {
-            if (delta.IsPlayerIdChanged)
-                PlayerId = delta.PlayerId;
+            if (delta.isPlayerIdChanged)
+                playerId = delta.playerId;
 
-            while (delta.PlayerInfos.Count > PlayerInfos.Count)
-                PlayerInfos.Add(delta.PlayerInfos[PlayerInfos.Count]);
-            while (delta.PlayerInfos.Count < PlayerInfos.Count)
-                PlayerInfos.RemoveAt(PlayerInfos.Count - 1);
-            for (var i = 0; i < PlayerInfos.Count; i++)
-                PlayerInfos[i].ApplyDelta(delta.PlayerInfos[i]);
+            while (delta.playerInfos.Count > playerInfos.Count)
+                playerInfos.Add(delta.playerInfos[playerInfos.Count]);
+            while (delta.playerInfos.Count < playerInfos.Count)
+                playerInfos.RemoveAt(playerInfos.Count - 1);
+            for (var i = 0; i < playerInfos.Count; i++)
+                playerInfos[i].ApplyDelta(delta.playerInfos[i]);
 
-            if (delta.IsDealerChanged)
-                Dealer = delta.Dealer;
-            if (delta.IsAggressorChanged)
-                Aggressor = delta.Aggressor;
-            if (delta.IsActivePlayerChanged)
-                ActivePlayer = delta.ActivePlayer;
-            if (delta.IsTimerStartTimestampMsChanged)
-                TimerStartTimestampMs = delta.TimerStartTimestampMs;
-            if (delta.IsTimerIntervalMsChanged)
-                TimerIntervalMs = delta.TimerIntervalMs;
+            if (delta.isDealerChanged)
+                dealer = delta.dealer;
+            if (delta.isAggressorChanged)
+                aggressor = delta.aggressor;
+            if (delta.isActivePlayerChanged)
+                activePlayer = delta.activePlayer;
+            if (delta.isTimerStartTimestampMsChanged)
+                timerStartTimestampMs = delta.timerStartTimestampMs;
+            if (delta.isTimerIntervalMsChanged)
+                timerIntervalMs = delta.timerIntervalMs;
         }
     }
 
     [Serializable]
     public class PlayerInfo
     {
-        public bool IsNameChanged { get; set; } = false;
-        public string Name { get; set; } = string.Empty;
+        public bool isNameChanged = false;
+        public string name = string.Empty;
 
-        public bool IsNetWorthChanged { get; set; } = false;
-        public int NetWorth { get; set; } = -1;
+        public bool isNetWorthChanged = false;
+        public int netWorth = -1;
 
-        public bool IsBetChanged { get; set; } = false;
-        public int Bet { get; set; } = -1;
+        public bool isBetChanged = false;
+        public int bet = -1;
 
-        public bool IsIsFoldedChanged { get; set; } = false;
-        public bool IsFolded { get; set; } = false;
+        public bool isIsFoldedChanged = false;
+        public bool isFolded = false;
 
-        public bool IsMainHandChanged { get; set; } = false;
-        public Collection<string> MainHand { get; set; } = new();
+        public bool isMainHandChanged = false;
+        public Collection<string> mainHand = new();
 
         public void ApplyDelta(PlayerInfo delta)
         {
-            if (delta.IsNameChanged)
-                Name = delta.Name;
-            if (delta.IsNetWorthChanged)
-                NetWorth = delta.NetWorth;
-            if (delta.IsBetChanged)
-                Bet = delta.Bet;
-            if (delta.IsIsFoldedChanged)
-                IsFolded = delta.IsFolded;
-            if (delta.IsMainHandChanged)
-                MainHand = delta.MainHand;
+            if (delta.isNameChanged)
+                name = delta.name;
+            if (delta.isNetWorthChanged)
+                netWorth = delta.netWorth;
+            if (delta.isBetChanged)
+                bet = delta.bet;
+            if (delta.isIsFoldedChanged)
+                isFolded = delta.isFolded;
+            if (delta.isMainHandChanged)
+                mainHand = delta.mainHand;
         }
     }
 
     [Serializable]
     public class UpdateGameStateResponse
     {
+        public bool success = false;
     }
 
     [Serializable]
     public class DoActionRequest
     {
-        public string Action { get; set; } = string.Empty;
-        public string Data { get; set; } = string.Empty;
+        public string action = string.Empty;
+        public string data = string.Empty;
     }
 
     [Serializable]
     public class DoActionResponse
     {
-        public bool Success { get; set; } = false;
+        public bool success = false;
     }
 }
