@@ -111,8 +111,7 @@ public class GameplayController : MonoBehaviour
             _tsDelta = request.serverTimestampMs - Common.TimeUtils.GetTimestampMs(DateTime.Now);
 
             // update game state
-            _localGameStateInfo.ApplyDelta(request.gameStateInfoDelta);
-            UpdateGameState();
+            UpdateGameState(request.gameStateInfo);
 
             // update action list
             UpdateActionList(request.availableActions);
@@ -132,23 +131,29 @@ public class GameplayController : MonoBehaviour
         }
     }
 
-    private void UpdateGameState()
+    private void UpdateGameState(GameStateInfo gameStateInfo)
     {
+        _localGameStateInfo = gameStateInfo;
+        _localGameStateInfo.playerInfos.Clear();
+
         // set global state
-        DealerText.text = _localGameStateInfo.playerInfos[_localGameStateInfo.dealer].name;
-        AggressorText.text = _localGameStateInfo.playerInfos[_localGameStateInfo.aggressor].name;
-        ActivePlayerText.text = _localGameStateInfo.playerInfos[_localGameStateInfo.activePlayer].name;
-        SetTimer();
+        DealerText.text = gameStateInfo.playerInfos[gameStateInfo.dealer].name;
+        AggressorText.text = gameStateInfo.playerInfos[gameStateInfo.aggressor].name;
+        ActivePlayerText.text = gameStateInfo.playerInfos[gameStateInfo.activePlayer].name;
+        SetTimer(gameStateInfo);
 
         // sort players
-        var playerCount = _localGameStateInfo.playerInfos.Count;
+        var playerCount = gameStateInfo.playerInfos.Count;
         var playerInfos = new List<PlayerInfo>();
-        var curId = _localGameStateInfo.playerId;
+        var curId = gameStateInfo.playerId;
         for (var i = 0; i < playerCount; i++)
         {
-            var playerInfo = _localGameStateInfo.playerInfos[curId++ % playerCount];
+            var playerInfo = gameStateInfo.playerInfos[curId++ % playerCount];
             playerInfos.Add(playerInfo);
+            _localGameStateInfo.playerInfos.Add(playerInfo);
         }
+
+        // TODO: hide or show player info panels
 
         // set player state
         if (playerInfos.Count > 0)
@@ -182,11 +187,11 @@ public class GameplayController : MonoBehaviour
         }
     }
 
-    private void SetTimer()
+    private void SetTimer(GameStateInfo gameStateInfo)
     {
         var nowMs = Common.TimeUtils.GetTimestampMs(DateTime.Now);
-        var startTimeMs = _localGameStateInfo.timerStartTimestampMs;
-        var intervalMs = _localGameStateInfo.timerIntervalMs;
+        var startTimeMs = gameStateInfo.timerStartTimestampMs;
+        var intervalMs = gameStateInfo.timerIntervalMs;
         var timeLeftMs = startTimeMs + intervalMs - nowMs;
 
         if (timeLeftMs <= 0)

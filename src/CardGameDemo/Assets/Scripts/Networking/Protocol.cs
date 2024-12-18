@@ -131,89 +131,30 @@ namespace Networking
     public class UpdateGameStateRequest
     {
         public long serverTimestampMs = -1;
-        public GameStateInfo gameStateInfoDelta = new();
+        public GameStateInfo gameStateInfo = new();
         public Collection<string> availableActions = new();
     }
 
     [Serializable]
     public class GameStateInfo
     {
-        public bool isPlayerIdChanged = false;
         public int playerId = -1;
-
         public Collection<PlayerInfo> playerInfos = new();
-
-        public bool isDealerChanged = false;
         public int dealer = -1;
-
-        public bool isAggressorChanged = false;
         public int aggressor = -1;
-
-        public bool isActivePlayerChanged = false;
         public int activePlayer = -1;
-
-        public bool isTimerStartTimestampMsChanged = false;
         public long timerStartTimestampMs = -1;
-
-        public bool isTimerIntervalMsChanged = false;
         public long timerIntervalMs = -1;
-
-        public void ApplyDelta(GameStateInfo delta)
-        {
-            if (delta.isPlayerIdChanged)
-                playerId = delta.playerId;
-
-            while (delta.playerInfos.Count > playerInfos.Count)
-                playerInfos.Add(delta.playerInfos[playerInfos.Count]);
-            while (delta.playerInfos.Count < playerInfos.Count)
-                playerInfos.RemoveAt(playerInfos.Count - 1);
-            for (var i = 0; i < playerInfos.Count; i++)
-                playerInfos[i].ApplyDelta(delta.playerInfos[i]);
-
-            if (delta.isDealerChanged)
-                dealer = delta.dealer;
-            if (delta.isAggressorChanged)
-                aggressor = delta.aggressor;
-            if (delta.isActivePlayerChanged)
-                activePlayer = delta.activePlayer;
-            if (delta.isTimerStartTimestampMsChanged)
-                timerStartTimestampMs = delta.timerStartTimestampMs;
-            if (delta.isTimerIntervalMsChanged)
-                timerIntervalMs = delta.timerIntervalMs;
-        }
     }
 
     [Serializable]
     public class PlayerInfo
     {
-        public bool isNameChanged = false;
         public string name = string.Empty;
-
-        public bool isNetWorthChanged = false;
         public int netWorth = -1;
-
-        public bool isBetChanged = false;
         public int bet = -1;
-
-        public bool isIsFoldedChanged = false;
         public bool isFolded = false;
-
-        public bool isMainHandChanged = false;
         public Collection<string> mainHand = new();
-
-        public void ApplyDelta(PlayerInfo delta)
-        {
-            if (delta.isNameChanged)
-                name = delta.name;
-            if (delta.isNetWorthChanged)
-                netWorth = delta.netWorth;
-            if (delta.isBetChanged)
-                bet = delta.bet;
-            if (delta.isIsFoldedChanged)
-                isFolded = delta.isFolded;
-            if (delta.isMainHandChanged)
-                mainHand = delta.mainHand;
-        }
     }
 
     [Serializable]

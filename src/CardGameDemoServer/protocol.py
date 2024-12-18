@@ -127,31 +127,19 @@ class UpdateGameStateRequest:
 class GameStateInfo:
     def __init__(
             self,
-            isPlayerIdChanged: bool = False,
             playerId: int = -1,
-            playerInfos: list = [], # str list, need to parse
-            isDealerChanged: bool = False,
+            playerInfos: list = [],
             dealer: int = -1,
-            isAggressorChanged: bool = False,
             aggressor: int = -1,
-            isActivePlayerChanged: bool = False,
             activePlayer: int = -1,
-            isTimerStartTimestampMsChanged: bool = False,
             timerStartTimestampMs: int = -1,
-            isTimerIntervalMsChanged: bool = False,
             timerIntervalMs: int = -1):
-        self.isPlayerIdChanged = isPlayerIdChanged
         self.playerId = playerId
         self.playerInfos = playerInfos
-        self.isDealerChanged = isDealerChanged
         self.dealer = dealer
-        self.isAggressorChanged = isAggressorChanged
         self.aggressor = aggressor
-        self.isActivePlayerChanged = isActivePlayerChanged
         self.activePlayer = activePlayer
-        self.isTimerStartTimestampMsChanged = isTimerStartTimestampMsChanged
         self.timerStartTimestampMs = timerStartTimestampMs
-        self.isTimerIntervalMsChanged = isTimerIntervalMsChanged
         self.timerIntervalMs = timerIntervalMs
 
     def raw_data(self):
@@ -159,36 +147,20 @@ class GameStateInfo:
 
     def from_raw_data(raw_data: str):
         return GameStateInfo(**json.loads(raw_data))
-    
-    def get_player_infos(self):
-        ret = []
-        for player_info in self.playerInfos:
-            ret.append(PlayerInfo.from_raw_data(player_info))
-        return ret
 
 
 class PlayerInfo:
     def __init__(
             self,
-            isNameChanged: bool = False,
             name: str = '',
-            isNetWorthChanged: bool = False,
             netWorth: int = 0,
-            isBetChanged: bool = False,
             bet: int = 0,
-            isIsFoldedChanged: bool = False,
             isFolded: bool = False,
-            isMainHandChanged: bool = False,
             mainHand: list = []):
-        self.isNameChanged = isNameChanged
         self.name = name
-        self.isNetWorthChanged = isNetWorthChanged
         self.netWorth = netWorth
-        self.isBetChanged = isBetChanged
         self.bet = bet
-        self.isIsFoldedChanged = isIsFoldedChanged
         self.isFolded = isFolded
-        self.isMainHandChanged = isMainHandChanged
         self.mainHand = mainHand
 
     def raw_data(self):
