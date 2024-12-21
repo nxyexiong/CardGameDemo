@@ -7,15 +7,6 @@ using Networking;
 
 public class GameplayController : MonoBehaviour
 {
-    private enum GameState
-    {
-        Start,
-        WaitingForHandshake,
-        WaitingForServer,
-        WaitingForAction,
-        GameOver,
-    }
-
     private enum Action
     {
         FollowBet,
@@ -58,9 +49,9 @@ public class GameplayController : MonoBehaviour
     private string _profileId = string.Empty;
     private string _name = string.Empty;
     private Client _client;
+    private bool _connected = false;
     private long _tsDelta = 0; // server time - local time
     private GameStateInfo _localGameStateInfo = new();
-    private GameState _gameState = GameState.Start;
     private readonly List<GameObject> _mainHandCards = new(); // card objects
     private readonly List<GameObject> _actions = new(); // action button objects
 
@@ -73,29 +64,31 @@ public class GameplayController : MonoBehaviour
         // init client
         _client = GetComponent<Client>();
         _client.SetListener((UpdateGameStateRequest r) => OnUpdateGameStateRequest(r));
-
-        // next state
-        _gameState = GameState.Start;
+        _client.SetConnectionStatusListener((connected) =>
+        {
+            if (connected && !_connected)
+            {
+                // start handshake
+                var request = new HandshakeRequest { profileId = _profileId, name = _name };
+                _ = _client.SendRequest(request, (HandshakeResponse response) =>
+                {
+                    if (response == null || !response.success)
+                    {
+                        Debug.LogError($"HandshakeResponse is null or not success: " +
+                            $"{response?.success.ToString() ?? "null"}");
+                    }
+                });
+            }
+            else if (!connected && _connected)
+            {
+                // TODO
+            }
+            _connected = connected;
+        });
     }
 
     void Update()
     {
-        if (_gameState == GameState.Start)
-        {
-            var request = new HandshakeRequest { profileId = _profileId, name = _name };
-            _ = _client.SendRequest(request, (HandshakeResponse response) =>
-            {
-                if (response == null || !response.success)
-                {
-                    Debug.LogError($"HandshakeResponse is null or not success: " +
-                        $"{response?.success.ToString() ?? "null"}");
-                    _gameState = GameState.Start;
-                    return;
-                }
-                _gameState = GameState.WaitingForServer;
-            });
-            _gameState = GameState.WaitingForHandshake;
-        }
     }
 
     void OnDestroy()
@@ -105,30 +98,13 @@ public class GameplayController : MonoBehaviour
 
     private UpdateGameStateResponse OnUpdateGameStateRequest(UpdateGameStateRequest request)
     {
-        if (_gameState == GameState.WaitingForServer)
-        {
-            // sync time
-            _tsDelta = request.serverTimestampMs - Common.TimeUtils.GetTimestampMs(DateTime.Now);
+        // sync time
+        _tsDelta = request.serverTimestampMs - Common.TimeUtils.GetTimestampMs(DateTime.Now);
 
-            // update game state
-            UpdateGameState(request.gameStateInfo);
+        // update game state
+        UpdateGameState(request.gameStateInfo);
 
-            // update action list
-            UpdateActionList(request.availableActions);
-
-            // next state
-            if (request.availableActions.Count > 0)
-                _gameState = GameState.WaitingForAction;
-
-            return new UpdateGameStateResponse { success = true };
-        }
-        else
-        {
-            Debug.LogError($"OnUpdateGameStateRequest, " +
-                $"unknown request {request.GetType().FullName} for state {_gameState}");
-
-            return new UpdateGameStateResponse { success = false };
-        }
+        return new UpdateGameStateResponse { success = true };
     }
 
     private void UpdateGameState(GameStateInfo gameStateInfo)
@@ -163,6 +139,7 @@ public class GameplayController : MonoBehaviour
             Player0BetText.text = playerInfos[0].bet.ToString();
             Player0IsFoldedText.text = playerInfos[0].isFolded.ToString();
             UpdateMainHand(playerInfos[0].mainHand);
+            UpdateActionList(playerInfos[0].availableActions);
         }
         if (playerInfos.Count > 1)
         {
@@ -312,35 +289,19 @@ public class GameplayController : MonoBehaviour
 
     private void DoAction(Action action, string data)
     {
-        if (_gameState == GameState.WaitingForAction)
+        // build request
+        var request = new DoActionRequest { action = action.ToString() };
+        //if (action == Action.xxx)
+        //{
+        //    // fill data if needed
+        //}
+        _client.SendRequest(request, (DoActionResponse response) =>
         {
-            // build request
-            var request = new DoActionRequest { action = action.ToString() };
-            //if (action == Action.xxx)
-            //{
-            //    // fill data if needed
-            //}
-            _client.SendRequest(request, (DoActionResponse response) =>
+            if (response == null || !response.success)
             {
-                if (response == null || !response.success)
-                {
-                    Debug.LogError($"DoAction, response is null or not success: " +
-                        $"{response?.success.ToString() ?? "null"}");
-                    return;
-                }
-                OnActionComplete(action, data);
-            });
-        }
-        else
-        {
-            Debug.LogError($"DoAction, " +
-                $"unknown action {action} for state {_gameState}");
-        }
-    }
-
-    private void OnActionComplete(Action action, string data)
-    {
-        _gameState = GameState.WaitingForServer;
-        UpdateActionList(new List<string>());
+                Debug.LogError($"DoAction, response is null or not success: " +
+                    $"{response?.success.ToString() ?? "null"}");
+            }
+        });
     }
 }

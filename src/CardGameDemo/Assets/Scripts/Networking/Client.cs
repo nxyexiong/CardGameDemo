@@ -16,10 +16,17 @@ namespace Networking
         // request type name -> internal callback (request -> response)
         private readonly Dictionary<string, Func<string, string>> _s2cHandlers = new();
 
+        private bool _connected = false;
+        private Action<bool> _connectionStatusCallback = null;
+
         void Start()
         {
             _socket = new SocketClient();
-            _socket.Connect("127.0.0.1", 8800);
+            _socket.Connect("127.0.0.1", 8800, false, (connected) =>
+            {
+                _connected = connected;
+                _connectionStatusCallback?.Invoke(_connected);
+            });
         }
 
         void Update()
@@ -194,6 +201,17 @@ namespace Networking
         public void RemoveListener<TRequest>()
         {
             _s2cHandlers.Remove(typeof(TRequest).FullName);
+        }
+
+        public void SetConnectionStatusListener(Action<bool> callback)
+        {
+            _connectionStatusCallback = callback;
+            callback.Invoke(_connected);
+        }
+
+        public void RemoveConnectionStatusListener()
+        {
+            _connectionStatusCallback = null;
         }
     }
 }

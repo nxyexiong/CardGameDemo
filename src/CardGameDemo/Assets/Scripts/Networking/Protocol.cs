@@ -132,7 +132,6 @@ namespace Networking
     {
         public long serverTimestampMs = -1;
         public GameStateInfo gameStateInfo = new();
-        public Collection<string> availableActions = new();
     }
 
     [Serializable]
@@ -155,6 +154,7 @@ namespace Networking
         public int bet = -1;
         public bool isFolded = false;
         public Collection<string> mainHand = new();
+        public Collection<string> availableActions = new();
     }
 
     [Serializable]

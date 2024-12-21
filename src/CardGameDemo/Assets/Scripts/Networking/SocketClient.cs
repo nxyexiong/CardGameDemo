@@ -19,6 +19,7 @@ namespace Networking
         private Socket _socket;
         private bool _isIpv6;
         private IPEndPoint _endPoint;
+        private Action<bool> _onConnectionStatusChange;
         private readonly List<byte[]> _sendingQueue; // stores headers
         private readonly List<byte[]> _recvingQueue; // doesnt store headers
 
@@ -27,12 +28,14 @@ namespace Networking
             _socket = null;
             _isIpv6 = false;
             _endPoint = null;
+            _onConnectionStatusChange = null;
             _sendingQueue = new List<byte[]>();
             _recvingQueue = new List<byte[]>();
         }
 
-        public void Connect(string ip, int port, bool isIpv6 = false)
+        public void Connect(string ip, int port, bool isIpv6 = false, Action<bool> onConnectionStatusChange = null)
         {
+            _onConnectionStatusChange = onConnectionStatusChange;
             Disconnect();
             _isIpv6 = isIpv6;
             _endPoint = new IPEndPoint(IPAddress.Parse(ip), port);
@@ -43,6 +46,7 @@ namespace Networking
             _endPoint = null;
             if (_socket != null)
             {
+                _onConnectionStatusChange?.Invoke(false);
                 _socket.Close();
                 _socket = null;
             }
@@ -78,6 +82,7 @@ namespace Networking
                             break;
                         }
                     }
+                    _onConnectionStatusChange?.Invoke(true);
                 }
 
                 try
@@ -135,6 +140,7 @@ namespace Networking
 
             if (disconnected)
             {
+                _onConnectionStatusChange?.Invoke(false);
                 _socket?.Close();
                 _socket = null;
             }
