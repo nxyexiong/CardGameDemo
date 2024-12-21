@@ -20,6 +20,7 @@ namespace Networking
         private bool _isIpv6;
         private IPEndPoint _endPoint;
         private Action<bool> _onConnectionStatusChange;
+        private List<byte> _buffer;
         private readonly List<byte[]> _sendingQueue; // stores headers
         private readonly List<byte[]> _recvingQueue; // doesnt store headers
 
@@ -29,8 +30,9 @@ namespace Networking
             _isIpv6 = false;
             _endPoint = null;
             _onConnectionStatusChange = null;
-            _sendingQueue = new List<byte[]>();
-            _recvingQueue = new List<byte[]>();
+            _buffer = new();
+            _sendingQueue = new();
+            _recvingQueue = new();
         }
 
         public void Connect(string ip, int port, bool isIpv6 = false, Action<bool> onConnectionStatusChange = null)
@@ -98,19 +100,20 @@ namespace Networking
                     if (_socket.Poll(0, SelectMode.SelectRead))
                     {
                         var buf = new byte[_bufSize];
-                        var msg = new List<byte>();
                         var r = _socket.Receive(buf);
                         if (r <= 0)
                         {
                             disconnected = true;
                             break;
                         }
-                        msg.AddRange(buf.Take(r));
-                        if (msg.Count < 2) continue;
-                        var len = msg[0] * 256 + msg[1];
-                        if (msg.Count < len + 2) continue;
-                        _recvingQueue.Add(msg.Skip(2).Take(len).ToArray());
-                        msg.RemoveRange(0, len + 2);
+                        _buffer.AddRange(buf.Take(r));
+                        while (_buffer.Count >= 2)
+                        {
+                            var len = _buffer[0] * 256 + _buffer[1];
+                            if (_buffer.Count < len + 2) break;
+                            _recvingQueue.Add(_buffer.Skip(2).Take(len).ToArray());
+                            _buffer.RemoveRange(0, len + 2);
+                        }
                     }
 
                     // handle write

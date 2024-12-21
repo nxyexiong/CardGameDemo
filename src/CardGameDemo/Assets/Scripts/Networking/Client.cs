@@ -37,11 +37,11 @@ namespace Networking
                 var data = System.Text.Encoding.UTF8.GetString(msg);
                 Debug.Log($"connection on message:\r\n{data}");
 
-                // parse S2CData
-                S2CData s2cData;
+                // parse CSData
+                CSData s2cData;
                 try
                 {
-                    s2cData = S2CData.From(data);
+                    s2cData = CSData.From(data);
                 }
                 catch (Exception ex)
                 {
@@ -50,13 +50,13 @@ namespace Networking
                 }
 
                 // handle request or response
-                if (s2cData.type == S2CData.DataType.Request)
+                if (s2cData.Type == CSData.DataType.Request)
                 {
                     // parse request
                     Request req;
                     try
                     {
-                        req = Request.From(s2cData.data);
+                        req = Request.From(s2cData.Data);
                     }
                     catch (Exception ex)
                     {
@@ -66,15 +66,15 @@ namespace Networking
 
                     // call request handler
                     var rspData = string.Empty;
-                    if (_s2cHandlers.TryGetValue(req.type, out var handler))
-                        rspData = handler.Invoke(req.data);
+                    if (_s2cHandlers.TryGetValue(req.Type, out var handler))
+                        rspData = handler.Invoke(req.Data);
 
                     // build response
-                    C2SData c2sData;
+                    CSData c2sData;
                     try
                     {
-                        Response rsp = Response.Build(req.seq, rspData);
-                        c2sData = C2SData.Build(C2SData.DataType.Response, rsp.RawData());
+                        var rsp = new Response { Seq = req.Seq, Data = rspData };
+                        c2sData = new CSData { Type = CSData.DataType.Response, Data = rsp.RawData() };
                     }
                     catch (Exception ex)
                     {
@@ -85,13 +85,13 @@ namespace Networking
                     // send data
                     _socket.SendMsg(System.Text.Encoding.UTF8.GetBytes(c2sData.RawData()));
                 }
-                else if (s2cData.type == S2CData.DataType.Response)
+                else if (s2cData.Type == CSData.DataType.Response)
                 {
                     // build response
                     Response rsp;
                     try
                     {
-                        rsp = Response.From(s2cData.data);
+                        rsp = Response.From(s2cData.Data);
                     }
                     catch (Exception ex)
                     {
@@ -100,8 +100,8 @@ namespace Networking
                     }
 
                     // notify
-                    if (_c2sHandlers.TryGetValue(rsp.seq, out var callback))
-                        callback.Invoke(rsp.data);
+                    if (_c2sHandlers.TryGetValue(rsp.Seq, out var callback))
+                        callback.Invoke(rsp.Data);
                 }
             }
         }
@@ -114,93 +114,37 @@ namespace Networking
 
         // must be called in main thread
         // return false if sending is failed, callback gives default if failed
-        public bool SendRequest<TRequest, TResponse>(TRequest request, Action<TResponse> callback)
+        public bool SendRequest(string typeName, string requestRaw, Action<string> callback)
         {
             var seq = _seq++;
 
-            // build C2SData
-            C2SData c2sData;
-            try
-            {
-                var data = Request.Build(seq, request);
-                c2sData = C2SData.Build(C2SData.DataType.Request, data);
-            }
-            catch (Exception ex)
-            {
-                Debug.Log($"Request, building C2SData failed: {ex}");
-                return false;
-            }
+            // build CSData
+            var data = new Request { Seq = seq, Type = typeName, Data = requestRaw };
+            var csData = new CSData { Type = CSData.DataType.Request, Data = data.RawData() };
 
             // setup handler
             _c2sHandlers[seq] = new Action<string>((rspRaw) =>
             {
                 _c2sHandlers.Remove(seq);
-                if (string.IsNullOrEmpty(rspRaw))
-                {
-                    Debug.Log($"Request, response is null or empty");
-                    callback.Invoke(default);
-                    return;
-                }
-                TResponse response;
-                try
-                {
-                    response = JsonUtility.FromJson<TResponse>(rspRaw);
-                }
-                catch (Exception ex)
-                {
-                    Debug.Log($"Request, building TResponse failed: {ex}");
-                    callback.Invoke(default);
-                    return;
-                }
-                callback.Invoke(response);
+                callback.Invoke(rspRaw);
             });
 
             // send
-            _socket.SendMsg(System.Text.Encoding.UTF8.GetBytes(c2sData.RawData()));
+            _socket.SendMsg(System.Text.Encoding.UTF8.GetBytes(csData.RawData()));
 
             return true;
         }
 
         // must be called in main thread
-        public void SetListener<TRequest, TResponse>(Func<TRequest, TResponse> func)
+        public void SetListener(string typeName, Func<string, string> func)
         {
-            _s2cHandlers[typeof(TRequest).FullName] = (string reqData) =>
-            {
-                // parse request
-                TRequest req;
-                try
-                {
-                    req = JsonUtility.FromJson<TRequest>(reqData);
-                }
-                catch (Exception ex)
-                {
-                    Debug.Log($"_s2cHandlers, parsing TRequest failed: {ex}");
-                    return null;
-                }
-
-                // invoke handler
-                var rsp = func.Invoke(req);
-
-                // build response string
-                string rspRaw;
-                try
-                {
-                    rspRaw = JsonUtility.ToJson(rsp);
-                }
-                catch (Exception ex)
-                {
-                    Debug.Log($"_s2cHandlers, parsing response string failed: {ex}");
-                    return null;
-                }
-
-                return rspRaw;
-            };
+            _s2cHandlers[typeName] = func;
         }
 
         // must be called in main thread
-        public void RemoveListener<TRequest>()
+        public void RemoveListener(string typeName)
         {
-            _s2cHandlers.Remove(typeof(TRequest).FullName);
+            _s2cHandlers.Remove(typeName);
         }
 
         public void SetConnectionStatusListener(Action<bool> callback)

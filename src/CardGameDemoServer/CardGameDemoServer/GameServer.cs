@@ -18,6 +18,14 @@ namespace CardGameDemoServer
             End,
         }
 
+        private enum PlayerAction
+        {
+            FollowBet,
+            RaiseBet,
+            Fold,
+            Showdown,
+        }
+
         private class ClientInfo
         {
             public Socket? Socket { get; set; } = null;
@@ -62,7 +70,7 @@ namespace CardGameDemoServer
             {
                 var profileId = profileIds?.ElementAt(i) ?? string.Empty;
                 _clients[profileId] = new ClientInfo { Socket = null, PlayerId = i };
-                _gameStateInfo.playerInfos.Add(new());
+                _gameStateInfo.PlayerInfos.Add(new());
             }
             _responseContexts = [];
         }
@@ -138,15 +146,17 @@ namespace CardGameDemoServer
                                 }
                                 try
                                 {
-                                    buffers[client].AddRange(buf);
+                                    buffers[client].AddRange(buf.Take(r));
                                     if (buffers[client].Count > 1000 * 1000)
                                         throw new InvalidDataException("client buffer exceeded");
-                                    if (buffers[client].Count < 2) continue;
-                                    var msgLen = buffers[client].ElementAt(0) * 256 + buffers[client].ElementAt(1);
-                                    if (buffers[client].Count < msgLen) continue;
-                                    var msgStr = Encoding.UTF8.GetString(buffers[client].Skip(2).Take(msgLen).ToArray());
-                                    buffers[client].RemoveRange(0, 2 + msgLen);
-                                    HandleClientMsg(client, msgStr);
+                                    while (buffers[client].Count >= 2)
+                                    {
+                                        var msgLen = buffers[client].ElementAt(0) * 256 + buffers[client].ElementAt(1);
+                                        if (buffers[client].Count < msgLen) break;
+                                        var msgStr = Encoding.UTF8.GetString(buffers[client].Skip(2).Take(msgLen).ToArray());
+                                        buffers[client].RemoveRange(0, 2 + msgLen);
+                                        HandleClientMsg(client, msgStr);
+                                    }
                                 }
                                 catch (Exception ex)
                                 {
@@ -184,48 +194,48 @@ namespace CardGameDemoServer
 
         private void HandleClientMsg(Socket client, string msg)
         {
-            Console.WriteLine($"[+] handle client msg, {client}: {msg}");
-            var c2sData = C2SData.From(msg);
-            if (c2sData?.type == C2SData.DataType.Request)
+            Console.WriteLine($"[+] handle client msg, {client.RemoteEndPoint}: {msg}");
+            var csData = CSData.From(msg);
+            if (csData?.Type == CSData.DataType.Request)
             {
-                var request = c2sData.GetRequest() ?? throw new InvalidDataException("client request is null");
+                var request = Request.From(csData.Data) ?? throw new InvalidDataException("client request is null");
                 HandleClientRequest(client, request);
             }
-            else if (c2sData?.type == C2SData.DataType.Response)
+            else if (csData?.Type == CSData.DataType.Response)
             {
-                var response = c2sData.GetResponse() ?? throw new InvalidDataException("client response is null");
+                var response = Response.From(csData.Data) ?? throw new InvalidDataException("client response is null");
                 HandleClientResponse(client, response);
             }
         }
 
         private void HandleClientRequest(Socket client, Request request)
         {
-            var seq = request.seq;
-            var typeName = request.type;
-            Console.WriteLine($"[+] handle client request, {client}: {seq}-{typeName}");
+            var seq = request.Seq;
+            var typeName = request.Type;
+            Console.WriteLine($"[+] handle client request, {client.RemoteEndPoint}: {seq}-{typeName}");
 
             // get response
             string? responseStr = null;
             Action? requestDoneCallback = null;
             switch (typeName)
             {
-                case $"{nameof(Networking)}.{nameof(HandshakeRequest)}":
-                    responseStr = GetResponseDataForHandshake(client, request.data, out requestDoneCallback);
+                case nameof(HandshakeRequest):
+                    responseStr = GetResponseDataForHandshake(client, request.Data, out requestDoneCallback);
                     break;
-                case $"{nameof(Networking)}.{nameof(DoActionRequest)}":
-                    responseStr = GetResponseDataForDoAction(client, request.data, out requestDoneCallback);
+                case nameof(DoActionRequest):
+                    responseStr = GetResponseDataForDoAction(client, request.Data, out requestDoneCallback);
                     break;
                 default:
                     Console.WriteLine($"[-] handle client request, unknown type {typeName}");
                     break;
             }
             if (responseStr == null)
-                throw new InvalidDataException($"[-] handle client request, response string is null: {client}, {typeName}");
+                throw new InvalidDataException($"[-] handle client request, response string is null: {typeName}");
 
             // send response
-            var response = new Response { seq = seq, data = responseStr };
-            var s2cData = new S2CData { type = S2CData.DataType.Response, data = response.RawData() };
-            SendMsg(client, s2cData.RawData());
+            var response = new Response { Seq = seq, Data = responseStr };
+            var csData = new CSData { Type = CSData.DataType.Response, Data = response.RawData() };
+            SendMsg(client, csData.RawData());
 
             // on request done
             requestDoneCallback?.Invoke();
@@ -233,8 +243,8 @@ namespace CardGameDemoServer
 
         private void HandleClientResponse(Socket client, Response response)
         {
-            var seq = response.seq;
-            Console.WriteLine($"[+] handle client response, {client}: {seq}");
+            var seq = response.Seq;
+            Console.WriteLine($"[+] handle client response, {client.RemoteEndPoint}: {seq}");
             if (!_responseContexts.TryGetValue(seq, out var context))
             {
                 Console.WriteLine($"[-] handle client response, unknown seq: {seq}");
@@ -251,16 +261,16 @@ namespace CardGameDemoServer
                 throw new InvalidDataException("parse HandshakeRequest failed");
 
             // check profile id
-            var profileId = request.profileId;
+            var profileId = request.ProfileId;
             if (!_clients.TryGetValue(profileId, out ClientInfo? clientInfo))
             {
                 Console.WriteLine($"[-] invalid profile id: {profileId}");
-                return JsonConvert.SerializeObject(new HandshakeResponse { success = false });
+                return JsonConvert.SerializeObject(new HandshakeResponse { Success = false });
             }
 
             // update client info
             clientInfo.Socket = client;
-            _gameStateInfo.playerInfos[clientInfo.PlayerId].name = request.name;
+            _gameStateInfo.PlayerInfos[clientInfo.PlayerId].Name = request.Name;
 
             // on request done
             requestDoneCallback = () =>
@@ -282,7 +292,7 @@ namespace CardGameDemoServer
                 if (!updated) UpdateGameStateForClient(profileId);
             };
 
-            return JsonConvert.SerializeObject(new HandshakeResponse { success = true });
+            return JsonConvert.SerializeObject(new HandshakeResponse { Success = true });
         }
 
         private string GetResponseDataForDoAction(Socket client, string requestData, out Action? requestDoneCallback)
@@ -292,8 +302,8 @@ namespace CardGameDemoServer
             var clientInfo = _clients.Where(x => x.Value.Socket == client).Select(x => x.Value).FirstOrDefault();
             if (clientInfo == null)
             {
-                Console.WriteLine($"[-] client info is null: {client}");
-                return JsonConvert.SerializeObject(new DoActionResponse { success = false });
+                Console.WriteLine($"[-] client info is null: {client.RemoteEndPoint}");
+                return JsonConvert.SerializeObject(new DoActionResponse { Success = false });
             }
 
             requestDoneCallback = () =>
@@ -304,15 +314,39 @@ namespace CardGameDemoServer
                     Console.WriteLine($"[-] do action request parse failed: {requestData}");
                     return;
                 }
-                OnDoAction(clientInfo.PlayerId, request.action);
+                OnDoAction(clientInfo.PlayerId, request.Action);
             };
 
-            return JsonConvert.SerializeObject(new DoActionResponse { success = true });
+            return JsonConvert.SerializeObject(new DoActionResponse { Success = true });
         }
 
         private void InitNewGame()
         {
-            // TODO
+            _gameStateInfo.Dealer = 0;
+            _gameStateInfo.Aggressor = 0;
+            _gameStateInfo.ActivePlayer = 0;
+            _gameStateInfo.TimerStartTimestampMs = GetTimestampMs(DateTime.Now);
+            _gameStateInfo.TimerIntervalMs = 30 * 1000;
+
+            for (var playerId = 0; playerId < _gameStateInfo.PlayerInfos.Count; playerId++)
+            {
+                var playerInfo = _gameStateInfo.PlayerInfos[playerId];
+                playerInfo.NetWorth = _initNetWorth;
+                playerInfo.Bet = 5;
+                playerInfo.IsFolded = false;
+                playerInfo.MainHand = ["5H", "6D", "7S"]; // TODO: DrawCard();
+                if (playerId == _gameStateInfo.ActivePlayer)
+                    playerInfo.AvailableActions = [
+                        PlayerAction.FollowBet.ToString(),
+                        PlayerAction.RaiseBet.ToString(),
+                        PlayerAction.Fold.ToString(),
+                        PlayerAction.Showdown.ToString(),
+                    ]; // TODO: GenerateActions();
+                else
+                    playerInfo.AvailableActions = [];
+            }
+
+            UpdateGameStateForClients();
         }
 
         private void OnDoAction(int playerId, string actionName)
@@ -341,31 +375,31 @@ namespace CardGameDemoServer
 
             var sendGameStateInfo = _gameStateInfo.Copy();
             var playerId = clientInfo.PlayerId;
-            sendGameStateInfo.playerId = playerId;
-            for (var i = 0; i < sendGameStateInfo.playerInfos.Count; i++)
+            sendGameStateInfo.PlayerId = playerId;
+            for (var i = 0; i < sendGameStateInfo.PlayerInfos.Count; i++)
             {
                 if (i != playerId)
                 {
-                    sendGameStateInfo.playerInfos[i].mainHand.Clear();
-                    sendGameStateInfo.playerInfos[i].availableActions.Clear();
+                    sendGameStateInfo.PlayerInfos[i].MainHand.Clear();
+                    sendGameStateInfo.PlayerInfos[i].AvailableActions.Clear();
                 }
             }
 
             var request = new UpdateGameStateRequest
             {
-                serverTimestampMs = GetTimestampMs(DateTime.Now),
-                gameStateInfo = sendGameStateInfo,
+                ServerTimestampMs = GetTimestampMs(DateTime.Now),
+                GameStateInfo = sendGameStateInfo,
             };
-            SendRequest(clientInfo.Socket, request, null);
+            SendRequest(clientInfo.Socket, nameof(UpdateGameStateRequest), request.RawData(), null);
         }
 
-        private void SendRequest<T>(Socket client, T request, Action? callback)
+        private void SendRequest(Socket client, string typeName, string requestRaw, Action? callback)
         {
-            var req = Request.Build(_seq++, request);
-            var s2cData = new S2CData { type = S2CData.DataType.Request, data = req.RawData() };
-            var context = new ResponseContext { Seq = req.seq, Callback = callback };
-            _responseContexts[req.seq] = context;
-            SendMsg(client, s2cData.RawData());
+            var req = new Request { Seq = _seq++, Type = typeName, Data = requestRaw };
+            var csData = new CSData { Type = CSData.DataType.Request, Data = req.RawData() };
+            var context = new ResponseContext { Seq = req.Seq, Callback = callback };
+            _responseContexts[req.Seq] = context;
+            SendMsg(client, csData.RawData());
         }
 
         private static void SendMsg(Socket sock, string msg)

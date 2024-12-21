@@ -63,20 +63,18 @@ public class GameplayController : MonoBehaviour
 
         // init client
         _client = GetComponent<Client>();
-        _client.SetListener((UpdateGameStateRequest r) => OnUpdateGameStateRequest(r));
+        _client.SetListener(nameof(UpdateGameStateRequest), x => OnUpdateGameStateRequest(x));
         _client.SetConnectionStatusListener((connected) =>
         {
             if (connected && !_connected)
             {
                 // start handshake
-                var request = new HandshakeRequest { profileId = _profileId, name = _name };
-                _ = _client.SendRequest(request, (HandshakeResponse response) =>
+                var request = new HandshakeRequest { ProfileId = _profileId, Name = _name };
+                _ = _client.SendRequest(nameof(HandshakeRequest), request.RawData(), (string responseRaw) =>
                 {
-                    if (response == null || !response.success)
-                    {
-                        Debug.LogError($"HandshakeResponse is null or not success: " +
-                            $"{response?.success.ToString() ?? "null"}");
-                    }
+                    var response = HandshakeResponse.From(responseRaw);
+                    if (!response.Success)
+                        Debug.LogError($"HandshakeResponse failed");
                 });
             }
             else if (!connected && _connected)
@@ -93,82 +91,85 @@ public class GameplayController : MonoBehaviour
 
     void OnDestroy()
     {
-        _client.RemoveListener<UpdateGameStateRequest>();
+        _client.RemoveListener(nameof(UpdateGameStateRequest));
     }
 
-    private UpdateGameStateResponse OnUpdateGameStateRequest(UpdateGameStateRequest request)
+    private string OnUpdateGameStateRequest(string requestRaw)
     {
+        // parse
+        var request = UpdateGameStateRequest.From(requestRaw);
+
         // sync time
-        _tsDelta = request.serverTimestampMs - Common.TimeUtils.GetTimestampMs(DateTime.Now);
+        _tsDelta = request.ServerTimestampMs - Common.TimeUtils.GetTimestampMs(DateTime.Now);
 
         // update game state
-        UpdateGameState(request.gameStateInfo);
+        UpdateGameState(request.GameStateInfo);
 
-        return new UpdateGameStateResponse { success = true };
+        return new UpdateGameStateResponse { Success = true }.RawData();
     }
 
     private void UpdateGameState(GameStateInfo gameStateInfo)
     {
-        _localGameStateInfo = gameStateInfo;
-        _localGameStateInfo.playerInfos.Clear();
-
-        // set global state
-        DealerText.text = gameStateInfo.playerInfos[gameStateInfo.dealer].name;
-        AggressorText.text = gameStateInfo.playerInfos[gameStateInfo.aggressor].name;
-        ActivePlayerText.text = gameStateInfo.playerInfos[gameStateInfo.activePlayer].name;
-        SetTimer(gameStateInfo);
-
-        // sort players
-        var playerCount = gameStateInfo.playerInfos.Count;
-        var playerInfos = new List<PlayerInfo>();
-        var curId = gameStateInfo.playerId;
+        // copy info
+        _localGameStateInfo = gameStateInfo.Copy();
+        _localGameStateInfo.PlayerInfos.Clear();
+        var playerCount = gameStateInfo.PlayerInfos.Count;
+        var curId = gameStateInfo.PlayerId;
         for (var i = 0; i < playerCount; i++)
         {
-            var playerInfo = gameStateInfo.playerInfos[curId++ % playerCount];
-            playerInfos.Add(playerInfo);
-            _localGameStateInfo.playerInfos.Add(playerInfo);
+            var playerInfo = gameStateInfo.PlayerInfos[curId++ % playerCount];
+            _localGameStateInfo.PlayerInfos.Add(playerInfo);
         }
+        _localGameStateInfo.Dealer = (gameStateInfo.Dealer - gameStateInfo.PlayerId) % playerCount;
+        _localGameStateInfo.Aggressor = (gameStateInfo.Aggressor - gameStateInfo.PlayerId) % playerCount;
+        _localGameStateInfo.ActivePlayer = (gameStateInfo.ActivePlayer - gameStateInfo.PlayerId) % playerCount;
+
+        // set global state
+        DealerText.text = _localGameStateInfo.PlayerInfos[_localGameStateInfo.Dealer].Name;
+        AggressorText.text = _localGameStateInfo.PlayerInfos[_localGameStateInfo.Aggressor].Name;
+        ActivePlayerText.text = _localGameStateInfo.PlayerInfos[_localGameStateInfo.ActivePlayer].Name;
+        SetTimer();
 
         // TODO: hide or show player info panels
 
         // set player state
-        if (playerInfos.Count > 0)
+        if (_localGameStateInfo.PlayerInfos.Count > 0)
         {
-            Player0NameText.text = playerInfos[0].name;
-            Player0NetWorthText.text = playerInfos[0].netWorth.ToString();
-            Player0BetText.text = playerInfos[0].bet.ToString();
-            Player0IsFoldedText.text = playerInfos[0].isFolded.ToString();
-            UpdateMainHand(playerInfos[0].mainHand);
-            UpdateActionList(playerInfos[0].availableActions);
+            Player0NameText.text = _localGameStateInfo.PlayerInfos[0].Name;
+            Player0NetWorthText.text = _localGameStateInfo.PlayerInfos[0].NetWorth.ToString();
+            Player0BetText.text = _localGameStateInfo.PlayerInfos[0].Bet.ToString();
+            Player0IsFoldedText.text = _localGameStateInfo.PlayerInfos[0].IsFolded.ToString();
+            UpdateMainHand(_localGameStateInfo.PlayerInfos[0].MainHand);
+            UpdateActionList(_localGameStateInfo.PlayerInfos[0].AvailableActions);
         }
-        if (playerInfos.Count > 1)
+        if (_localGameStateInfo.PlayerInfos.Count > 1)
         {
-            Player1NameText.text = playerInfos[1].name;
-            Player1NetWorthText.text = playerInfos[1].netWorth.ToString();
-            Player1BetText.text = playerInfos[1].bet.ToString();
-            Player1IsFoldedText.text = playerInfos[1].isFolded.ToString();
+            Player1NameText.text = _localGameStateInfo.PlayerInfos[1].Name;
+            Player1NetWorthText.text = _localGameStateInfo.PlayerInfos[1].NetWorth.ToString();
+            Player1BetText.text = _localGameStateInfo.PlayerInfos[1].Bet.ToString();
+            Player1IsFoldedText.text = _localGameStateInfo.PlayerInfos[1].IsFolded.ToString();
         }
-        if (playerInfos.Count > 2)
+        if (_localGameStateInfo.PlayerInfos.Count > 2)
         {
-            Player2NameText.text = playerInfos[2].name;
-            Player2NetWorthText.text = playerInfos[2].netWorth.ToString();
-            Player2BetText.text = playerInfos[2].bet.ToString();
-            Player2IsFoldedText.text = playerInfos[2].isFolded.ToString();
+            Player2NameText.text = _localGameStateInfo.PlayerInfos[2].Name;
+            Player2NetWorthText.text = _localGameStateInfo.PlayerInfos[2].NetWorth.ToString();
+            Player2BetText.text = _localGameStateInfo.PlayerInfos[2].Bet.ToString();
+            Player2IsFoldedText.text = _localGameStateInfo.PlayerInfos[2].IsFolded.ToString();
         }
-        if (playerInfos.Count > 3)
+        if (_localGameStateInfo.PlayerInfos.Count > 3)
         {
-            Player3NameText.text = playerInfos[3].name;
-            Player3NetWorthText.text = playerInfos[3].netWorth.ToString();
-            Player3BetText.text = playerInfos[3].bet.ToString();
-            Player3IsFoldedText.text = playerInfos[3].isFolded.ToString();
+            Player3NameText.text = _localGameStateInfo.PlayerInfos[3].Name;
+            Player3NetWorthText.text = _localGameStateInfo.PlayerInfos[3].NetWorth.ToString();
+            Player3BetText.text = _localGameStateInfo.PlayerInfos[3].Bet.ToString();
+            Player3IsFoldedText.text = _localGameStateInfo.PlayerInfos[3].IsFolded.ToString();
         }
     }
 
-    private void SetTimer(GameStateInfo gameStateInfo)
+    private void SetTimer()
     {
         var nowMs = Common.TimeUtils.GetTimestampMs(DateTime.Now);
-        var startTimeMs = gameStateInfo.timerStartTimestampMs;
-        var intervalMs = gameStateInfo.timerIntervalMs;
+        var startTimeMs = _localGameStateInfo.TimerStartTimestampMs;
+        var intervalMs = _localGameStateInfo.TimerIntervalMs;
         var timeLeftMs = startTimeMs + intervalMs - nowMs;
 
         if (timeLeftMs <= 0)
@@ -290,18 +291,12 @@ public class GameplayController : MonoBehaviour
     private void DoAction(Action action, string data)
     {
         // build request
-        var request = new DoActionRequest { action = action.ToString() };
-        //if (action == Action.xxx)
-        //{
-        //    // fill data if needed
-        //}
-        _client.SendRequest(request, (DoActionResponse response) =>
+        var request = new DoActionRequest { Action = action.ToString() };
+        _client.SendRequest(nameof(DoActionRequest), request.RawData(), (string responseRaw) =>
         {
-            if (response == null || !response.success)
-            {
-                Debug.LogError($"DoAction, response is null or not success: " +
-                    $"{response?.success.ToString() ?? "null"}");
-            }
+            var response = DoActionResponse.From(responseRaw);
+            if (!response.Success)
+                Debug.LogError($"DoAction, response failed");
         });
     }
 }

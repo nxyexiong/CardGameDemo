@@ -9,7 +9,7 @@ namespace CardGameDemoServer
             var server = new GameServer(
                 port: 8800,
                 isIpv6: false,
-                profileIds: ["aaa", "bbb"],
+                profileIds: ["aaa"],
                 initNetWorth: 500);
             server.Start();
 

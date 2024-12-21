@@ -1,11 +1,10 @@
 ﻿using System;
-using System.Collections.ObjectModel;
 using Newtonsoft.Json;
 
 namespace Networking
 {
-    [Serializable]
-    public class C2SData
+
+    public class CSData
     {
         public enum DataType : int
         {
@@ -13,43 +12,14 @@ namespace Networking
             Response = 1,
         }
 
-        public DataType type = DataType.Request;
-        public string data = string.Empty;
+        public DataType Type { get; set; } = DataType.Request;
+        public string Data { get; set; } = string.Empty;
 
-        public static C2SData Build<T>(DataType type, T data)
+        public static CSData From(string rawData)
         {
-            return new C2SData { type = type, data = JsonConvert.SerializeObject(data) };
+            return JsonConvert.DeserializeObject<CSData>(rawData) ??
+                throw new InvalidDataException("json parse failed");
         }
-
-        public static C2SData? From(string rawData)
-        {
-            return JsonConvert.DeserializeObject<C2SData>(rawData);
-        }
-
-        public Request? GetRequest()
-        {
-            if (type != DataType.Request) return null;
-            return Request.From(data);
-        }
-
-        public Response? GetResponse()
-        {
-            if (type != DataType.Response) return null;
-            return Response.From(data);
-        }
-    }
-
-    [Serializable]
-    public class S2CData
-    {
-        public enum DataType : int
-        {
-            Request = 0,
-            Response = 1,
-        }
-
-        public DataType type = DataType.Request;
-        public string data = string.Empty;
 
         public string RawData()
         {
@@ -57,26 +27,16 @@ namespace Networking
         }
     }
 
-    [Serializable]
     public class Request
     {
-        public int seq = -1;
-        public string type = string.Empty;
-        public string data = string.Empty;
+        public int Seq { get; set; } = -1;
+        public string Type { get; set; } = string.Empty;
+        public string Data { get; set; } = string.Empty;
 
-        public static Request Build<T>(int seq, T data)
+        public static Request From(string rawData)
         {
-            return new Request
-            {
-                seq = seq,
-                type = typeof(T).FullName ?? string.Empty,
-                data = JsonConvert.SerializeObject(data),
-            };
-        }
-
-        public static Request? From(string rawData)
-        {
-            return JsonConvert.DeserializeObject<Request>(rawData);
+            return JsonConvert.DeserializeObject<Request>(rawData) ??
+                throw new InvalidDataException("json parse failed");
         }
 
         public string RawData()
@@ -85,24 +45,15 @@ namespace Networking
         }
     }
 
-    [Serializable]
     public class Response
     {
-        public int seq = -1;
-        public string data = string.Empty;
+        public int Seq { get; set; } = -1;
+        public string Data { get; set; } = string.Empty;
 
-        public static Response Build<T>(int seq, T data)
+        public static Response From(string rawData)
         {
-            return new Response
-            {
-                seq = seq,
-                data = JsonConvert.SerializeObject(data),
-            };
-        }
-
-        public static Response? From(string rawData)
-        {
-            return JsonConvert.DeserializeObject<Response>(rawData);
+            return JsonConvert.DeserializeObject<Response>(rawData) ??
+                throw new InvalidDataException("json parse failed");
         }
 
         public string RawData()
@@ -111,104 +62,162 @@ namespace Networking
         }
     }
 
-    [Serializable]
     public class HandshakeRequest
     {
-        public string profileId = string.Empty;
-        public string name = string.Empty;
+        public string ProfileId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+
+        public static HandshakeRequest From(string rawData)
+        {
+            return JsonConvert.DeserializeObject<HandshakeRequest>(rawData) ??
+                throw new InvalidDataException("json parse failed");
+        }
+
+        public string RawData()
+        {
+            return JsonConvert.SerializeObject(this);
+        }
     }
 
-    [Serializable]
     public class HandshakeResponse
     {
-        public bool success = false;
+        public bool Success { get; set; } = false;
+
+        public static HandshakeResponse From(string rawData)
+        {
+            return JsonConvert.DeserializeObject<HandshakeResponse>(rawData) ??
+                throw new InvalidDataException("json parse failed");
+        }
+
+        public string RawData()
+        {
+            return JsonConvert.SerializeObject(this);
+        }
     }
 
-    [Serializable]
     public class UpdateGameStateRequest
     {
-        public long serverTimestampMs = -1;
-        public GameStateInfo gameStateInfo = new();
+        public long ServerTimestampMs { get; set; } = -1;
+        public GameStateInfo GameStateInfo { get; set; } = new();
+
+        public static UpdateGameStateRequest From(string rawData)
+        {
+            return JsonConvert.DeserializeObject<UpdateGameStateRequest>(rawData) ??
+                throw new InvalidDataException("json parse failed");
+        }
+
+        public string RawData()
+        {
+            return JsonConvert.SerializeObject(this);
+        }
     }
 
-    [Serializable]
     public class GameStateInfo
     {
-        public int playerId = -1;
-        public Collection<PlayerInfo> playerInfos = new();
-        public int dealer = -1;
-        public int aggressor = -1;
-        public int activePlayer = -1;
-        public long timerStartTimestampMs = -1;
-        public long timerIntervalMs = -1;
+        public int PlayerId { get; set; } = -1;
+        public List<PlayerInfo> PlayerInfos { get; set; } = new List<PlayerInfo>();
+        public int Dealer { get; set; } = -1;
+        public int Aggressor { get; set; } = -1;
+        public int ActivePlayer { get; set; } = -1;
+        public long TimerStartTimestampMs { get; set; } = -1;
+        public long TimerIntervalMs { get; set; } = -1;
 
         public GameStateInfo Copy()
         {
             var ret = new GameStateInfo
             {
-                playerId = playerId,
-                playerInfos = [],
-                dealer = dealer,
-                aggressor = aggressor,
-                activePlayer = activePlayer,
-                timerStartTimestampMs = timerStartTimestampMs,
-                timerIntervalMs = timerIntervalMs,
+                PlayerId = PlayerId,
+                PlayerInfos = new List<PlayerInfo>(),
+                Dealer = Dealer,
+                Aggressor = Aggressor,
+                ActivePlayer = ActivePlayer,
+                TimerStartTimestampMs = TimerStartTimestampMs,
+                TimerIntervalMs = TimerIntervalMs,
             };
 
-            foreach (var playerInfo in playerInfos)
-                ret.playerInfos.Add(playerInfo.Copy());
+            foreach (var playerInfo in PlayerInfos)
+                ret.PlayerInfos.Add(playerInfo.Copy());
 
             return ret;
         }
     }
 
-    [Serializable]
     public class PlayerInfo
     {
-        public string name = string.Empty;
-        public int netWorth = -1;
-        public int bet = -1;
-        public bool isFolded = false;
-        public Collection<string> mainHand = new();
-        public Collection<string> availableActions = new();
+        public string Name { get; set; } = string.Empty;
+        public int NetWorth { get; set; } = -1;
+        public int Bet { get; set; } = -1;
+        public bool IsFolded { get; set; } = false;
+        public List<string> MainHand { get; set; } = new List<string>();
+        public List<string> AvailableActions { get; set; } = new List<string>();
 
         public PlayerInfo Copy()
         {
             var ret = new PlayerInfo
             {
-                name = name,
-                netWorth = netWorth,
-                bet = bet,
-                isFolded = isFolded,
-                mainHand = [],
-                availableActions = [],
+                Name = Name,
+                NetWorth = NetWorth,
+                Bet = Bet,
+                IsFolded = IsFolded,
+                MainHand = new List<string>(),
+                AvailableActions = new List<string>(),
             };
 
-            foreach (var card in mainHand)
-                ret.mainHand.Add(card);
-            foreach (var availableAction in availableActions)
-                ret.availableActions.Add(availableAction);
+            foreach (var card in MainHand)
+                ret.MainHand.Add(card);
+            foreach (var availableAction in AvailableActions)
+                ret.AvailableActions.Add(availableAction);
 
             return ret;
         }
     }
 
-    [Serializable]
     public class UpdateGameStateResponse
     {
-        public bool success = false;
+        public bool Success { get; set; } = false;
+
+        public static UpdateGameStateResponse From(string rawData)
+        {
+            return JsonConvert.DeserializeObject<UpdateGameStateResponse>(rawData) ??
+                throw new InvalidDataException("json parse failed");
+        }
+
+        public string RawData()
+        {
+            return JsonConvert.SerializeObject(this);
+        }
     }
 
-    [Serializable]
     public class DoActionRequest
     {
-        public string action = string.Empty;
-        public string data = string.Empty;
+        public string Action { get; set; } = string.Empty;
+        public string Data { get; set; } = string.Empty;
+
+        public static DoActionRequest From(string rawData)
+        {
+            return JsonConvert.DeserializeObject<DoActionRequest>(rawData) ??
+                throw new InvalidDataException("json parse failed");
+        }
+
+        public string RawData()
+        {
+            return JsonConvert.SerializeObject(this);
+        }
     }
 
-    [Serializable]
     public class DoActionResponse
     {
-        public bool success = false;
+        public bool Success { get; set; } = false;
+
+        public static DoActionResponse From(string rawData)
+        {
+            return JsonConvert.DeserializeObject<DoActionResponse>(rawData) ??
+                throw new InvalidDataException("json parse failed");
+        }
+
+        public string RawData()
+        {
+            return JsonConvert.SerializeObject(this);
+        }
     }
 }
