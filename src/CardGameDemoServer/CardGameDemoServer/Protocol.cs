@@ -1,9 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Newtonsoft.Json;
 
 namespace Networking
@@ -25,9 +21,21 @@ namespace Networking
             return new C2SData { type = type, data = JsonConvert.SerializeObject(data) };
         }
 
-        public string RawData()
+        public static C2SData? From(string rawData)
         {
-            return JsonConvert.SerializeObject(this);
+            return JsonConvert.DeserializeObject<C2SData>(rawData);
+        }
+
+        public Request? GetRequest()
+        {
+            if (type != DataType.Request) return null;
+            return Request.From(data);
+        }
+
+        public Response? GetResponse()
+        {
+            if (type != DataType.Response) return null;
+            return Response.From(data);
         }
     }
 
@@ -43,21 +51,9 @@ namespace Networking
         public DataType type = DataType.Request;
         public string data = string.Empty;
 
-        public static S2CData? From(string rawData)
+        public string RawData()
         {
-            return JsonConvert.DeserializeObject<S2CData>(rawData);
-        }
-
-        public Request? GetRequest()
-        {
-            if (type != DataType.Request) return null;
-            return Request.From(data);
-        }
-
-        public Response? GetResponse()
-        {
-            if (type != DataType.Response) return null;
-            return Response.From(data);
+            return JsonConvert.SerializeObject(this);
         }
     }
 
@@ -133,7 +129,6 @@ namespace Networking
     {
         public long serverTimestampMs = -1;
         public GameStateInfo gameStateInfo = new();
-        public Collection<string> availableActions = new();
     }
 
     [Serializable]
@@ -146,6 +141,25 @@ namespace Networking
         public int activePlayer = -1;
         public long timerStartTimestampMs = -1;
         public long timerIntervalMs = -1;
+
+        public GameStateInfo Copy()
+        {
+            var ret = new GameStateInfo
+            {
+                playerId = playerId,
+                playerInfos = [],
+                dealer = dealer,
+                aggressor = aggressor,
+                activePlayer = activePlayer,
+                timerStartTimestampMs = timerStartTimestampMs,
+                timerIntervalMs = timerIntervalMs,
+            };
+
+            foreach (var playerInfo in playerInfos)
+                ret.playerInfos.Add(playerInfo.Copy());
+
+            return ret;
+        }
     }
 
     [Serializable]
@@ -156,6 +170,27 @@ namespace Networking
         public int bet = -1;
         public bool isFolded = false;
         public Collection<string> mainHand = new();
+        public Collection<string> availableActions = new();
+
+        public PlayerInfo Copy()
+        {
+            var ret = new PlayerInfo
+            {
+                name = name,
+                netWorth = netWorth,
+                bet = bet,
+                isFolded = isFolded,
+                mainHand = [],
+                availableActions = [],
+            };
+
+            foreach (var card in mainHand)
+                ret.mainHand.Add(card);
+            foreach (var availableAction in availableActions)
+                ret.availableActions.Add(availableAction);
+
+            return ret;
+        }
     }
 
     [Serializable]
