@@ -6,11 +6,7 @@ namespace CardGameDemoServer
     {
         public static void Main(string[] args)
         {
-            var server = new GameServer(
-                port: 8800,
-                isIpv6: false,
-                profileIds: ["aaa"],
-                initNetWorth: 500);
+            var server = new GameServer(8800, false, ["aaa"], 500, 30 * 1000);
             server.Start();
 
             var cancelled = false;

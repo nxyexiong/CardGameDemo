@@ -1,8 +1,35 @@
 ﻿using System;
 using Newtonsoft.Json;
 
-namespace Networking
+namespace CardGameDemoServer.Networking
 {
+
+    #region Enums
+    public enum GameState : int
+    {
+        // default
+        Unknown = 0,
+        // basic states
+        WaitingForPlayers = 1,
+        PlayersTurn = 2,
+        RoundResult = 3,
+        MatchResult = 4,
+        // additional states
+        // ..
+    }
+
+    public enum GeneralAction : int
+    {
+        Unknown = 0,
+        FollowBet = 1,
+        RaiseBet = 2,
+        Fold = 3,
+        Showdown = 4,
+    }
+
+    #endregion
+
+    #region GeneralStructs
 
     public class CSData
     {
@@ -62,6 +89,10 @@ namespace Networking
         }
     }
 
+    #endregion
+
+    #region RequestsAndResponses
+
     public class HandshakeRequest
     {
         public string ProfileId { get; set; } = string.Empty;
@@ -112,8 +143,63 @@ namespace Networking
         }
     }
 
+    public class UpdateGameStateResponse
+    {
+        public bool Success { get; set; } = false;
+
+        public static UpdateGameStateResponse From(string rawData)
+        {
+            return JsonConvert.DeserializeObject<UpdateGameStateResponse>(rawData) ??
+                throw new InvalidDataException("json parse failed");
+        }
+
+        public string RawData()
+        {
+            return JsonConvert.SerializeObject(this);
+        }
+    }
+
+    public class DoGeneralActionRequest
+    {
+        public GeneralAction Action { get; set; } = GeneralAction.Unknown;
+        public string Data { get; set; } = string.Empty;
+
+        public static DoGeneralActionRequest From(string rawData)
+        {
+            return JsonConvert.DeserializeObject<DoGeneralActionRequest>(rawData) ??
+                throw new InvalidDataException("json parse failed");
+        }
+
+        public string RawData()
+        {
+            return JsonConvert.SerializeObject(this);
+        }
+    }
+
+    public class DoGeneralActionResponse
+    {
+        public bool Success { get; set; } = false;
+        public string Data { get; set; } = string.Empty;
+
+        public static DoGeneralActionResponse From(string rawData)
+        {
+            return JsonConvert.DeserializeObject<DoGeneralActionResponse>(rawData) ??
+                throw new InvalidDataException("json parse failed");
+        }
+
+        public string RawData()
+        {
+            return JsonConvert.SerializeObject(this);
+        }
+    }
+
+    #endregion
+
+    #region GameStructs
+
     public class GameStateInfo
     {
+        public GameState CurrentState { get; set; } = GameState.Unknown;
         public int PlayerId { get; set; } = -1;
         public List<PlayerInfo> PlayerInfos { get; set; } = new List<PlayerInfo>();
         public int Dealer { get; set; } = -1;
@@ -126,6 +212,7 @@ namespace Networking
         {
             var ret = new GameStateInfo
             {
+                CurrentState = CurrentState,
                 PlayerId = PlayerId,
                 PlayerInfos = new List<PlayerInfo>(),
                 Dealer = Dealer,
@@ -149,7 +236,7 @@ namespace Networking
         public int Bet { get; set; } = -1;
         public bool IsFolded { get; set; } = false;
         public List<string> MainHand { get; set; } = new List<string>();
-        public List<string> AvailableActions { get; set; } = new List<string>();
+        public string StateData { get; set; } = string.Empty;
 
         public PlayerInfo Copy()
         {
@@ -160,25 +247,23 @@ namespace Networking
                 Bet = Bet,
                 IsFolded = IsFolded,
                 MainHand = new List<string>(),
-                AvailableActions = new List<string>(),
+                StateData = StateData,
             };
 
             foreach (var card in MainHand)
                 ret.MainHand.Add(card);
-            foreach (var availableAction in AvailableActions)
-                ret.AvailableActions.Add(availableAction);
 
             return ret;
         }
     }
 
-    public class UpdateGameStateResponse
+    public class PlayersTurnStateData
     {
-        public bool Success { get; set; } = false;
+        public List<GeneralAction> GeneralActions { get; set; } = new List<GeneralAction>();
 
-        public static UpdateGameStateResponse From(string rawData)
+        public static PlayersTurnStateData From(string rawData)
         {
-            return JsonConvert.DeserializeObject<UpdateGameStateResponse>(rawData) ??
+            return JsonConvert.DeserializeObject<PlayersTurnStateData>(rawData) ??
                 throw new InvalidDataException("json parse failed");
         }
 
@@ -188,14 +273,13 @@ namespace Networking
         }
     }
 
-    public class DoActionRequest
+    public class RaiseBetData
     {
-        public string Action { get; set; } = string.Empty;
-        public string Data { get; set; } = string.Empty;
+        public int Bet { get; set; } = -1;
 
-        public static DoActionRequest From(string rawData)
+        public static RaiseBetData From(string rawData)
         {
-            return JsonConvert.DeserializeObject<DoActionRequest>(rawData) ??
+            return JsonConvert.DeserializeObject<RaiseBetData>(rawData) ??
                 throw new InvalidDataException("json parse failed");
         }
 
@@ -205,19 +289,6 @@ namespace Networking
         }
     }
 
-    public class DoActionResponse
-    {
-        public bool Success { get; set; } = false;
+    #endregion
 
-        public static DoActionResponse From(string rawData)
-        {
-            return JsonConvert.DeserializeObject<DoActionResponse>(rawData) ??
-                throw new InvalidDataException("json parse failed");
-        }
-
-        public string RawData()
-        {
-            return JsonConvert.SerializeObject(this);
-        }
-    }
 }

@@ -7,14 +7,6 @@ using Networking;
 
 public class GameplayController : MonoBehaviour
 {
-    private enum Action
-    {
-        FollowBet,
-        RaiseBet,
-        Fold,
-        Showdown,
-    }
-
     public Text DealerText;
     public Text AggressorText;
     public Text ActivePlayerText;
@@ -87,6 +79,7 @@ public class GameplayController : MonoBehaviour
 
     void Update()
     {
+        SetTimer();
     }
 
     void OnDestroy()
@@ -140,7 +133,7 @@ public class GameplayController : MonoBehaviour
             Player0BetText.text = _localGameStateInfo.PlayerInfos[0].Bet.ToString();
             Player0IsFoldedText.text = _localGameStateInfo.PlayerInfos[0].IsFolded.ToString();
             UpdateMainHand(_localGameStateInfo.PlayerInfos[0].MainHand);
-            UpdateActionList(_localGameStateInfo.PlayerInfos[0].AvailableActions);
+            UpdateGeneralActionList();
         }
         if (_localGameStateInfo.PlayerInfos.Count > 1)
         {
@@ -216,10 +209,13 @@ public class GameplayController : MonoBehaviour
         }
     }
 
-    private void UpdateActionList(IEnumerable<string> actionRaws)
+    private void UpdateGeneralActionList()
     {
+        var playerInfo = _localGameStateInfo.PlayerInfos[0];
+        var stateData = PlayersTurnStateData.From(playerInfo.StateData);
+
         // add or remove objects
-        var newActionCount = actionRaws.Count();
+        var newActionCount = stateData.GeneralActions.Count;
         while (_actions.Count > newActionCount)
         {
             Destroy(_actions.First());
@@ -248,30 +244,34 @@ public class GameplayController : MonoBehaviour
         for (var i = 0; i < _actions.Count; i++)
         {
             var actionBtnController = _actions[i].GetComponent<ActionButtonController>();
-            var actionRaw = actionRaws.ElementAt(i);
-            actionBtnController.ActionName = actionRaw;
-            actionBtnController.Text.text = GetActionButtonText(actionRaw);
+            var action = stateData.GeneralActions.ElementAt(i);
+            actionBtnController.ActionName = action.ToString();
+            actionBtnController.Text.text = GetGeneralActionButtonText(action);
         }
 
         // add listener
         for (var i = 0; i < _actions.Count; i++)
         {
             var actionBtn = _actions[i];
-            actionBtn.GetComponent<Button>().onClick.AddListener(() => OnActionButtonClick(actionBtn));
+            actionBtn.GetComponent<Button>().onClick.AddListener(() =>
+            {
+                OnActionButtonClick(actionBtn);
+                foreach (var btn in _actions)
+                    Destroy(btn);
+                _actions.Clear();
+            });
         }
     }
 
-    private string GetActionButtonText(string actionRaw)
+    private string GetGeneralActionButtonText(GeneralAction action)
     {
-        if (!Enum.TryParse(actionRaw, out Action action))
-            return "unknown";
-        if (action == Action.FollowBet)
+        if (action == GeneralAction.FollowBet)
             return "Follow bet";
-        else if (action == Action.RaiseBet)
+        else if (action == GeneralAction.RaiseBet)
             return "Raise bet";
-        else if (action == Action.Fold)
+        else if (action == GeneralAction.Fold)
             return "Fold";
-        else if (action == Action.Showdown)
+        else if (action == GeneralAction.Showdown)
             return "Showdown";
         return "unassigned";
     }
@@ -280,23 +280,29 @@ public class GameplayController : MonoBehaviour
     {
         var actionBtnController = actionBtn.GetComponent<ActionButtonController>();
         var actionRaw = actionBtnController.ActionName;
-        if (Enum.TryParse(actionRaw, out Action action))
+        if (Enum.TryParse(actionRaw, out GeneralAction action))
         {
-            DoAction(action, string.Empty);
+            DoGeneralAction(action, string.Empty);
             return;
         }
         Debug.LogError($"OnActionButtonClick, unknown action {actionRaw}");
     }
 
-    private void DoAction(Action action, string data)
+    private void DoGeneralAction(GeneralAction action, string data)
     {
         // build request
-        var request = new DoActionRequest { Action = action.ToString() };
-        _client.SendRequest(nameof(DoActionRequest), request.RawData(), (string responseRaw) =>
+        var request = new DoGeneralActionRequest { Action = action };
+        if (action == GeneralAction.RaiseBet)
         {
-            var response = DoActionResponse.From(responseRaw);
+            var raiseBetData = new RaiseBetData { Bet = 5 };
+            request.Data = raiseBetData.RawData();
+        }
+
+        _client.SendRequest(nameof(DoGeneralActionRequest), request.RawData(), (string responseRaw) =>
+        {
+            var response = DoGeneralActionResponse.From(responseRaw);
             if (!response.Success)
-                Debug.LogError($"DoAction, response failed");
+                Debug.LogError($"DoGeneralAction, response failed");
         });
     }
 }
