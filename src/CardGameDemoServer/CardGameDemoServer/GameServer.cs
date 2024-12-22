@@ -179,6 +179,9 @@ namespace CardGameDemoServer
                             clients.Remove(client);
                         }
 
+                        // update
+                        _stateMap[_gameStateInfo.CurrentState].Update();
+
                         // wait 1ms in case nothing happens
                         Thread.Sleep(1);
                     }

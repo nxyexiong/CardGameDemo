@@ -19,6 +19,12 @@ namespace CardGameDemoServer.States
 
         protected override void OnEnter(object? data)
         {
+            SetInitNetWorth();
+        }
+
+        protected override void OnUpdate()
+        {
+            // TODO: timeout match end
         }
 
         protected override void OnLeave()
@@ -29,6 +35,12 @@ namespace CardGameDemoServer.States
         {
             requestDoneCallback = null;
             return null;
+        }
+
+        private void SetInitNetWorth()
+        {
+            foreach (var playerInfo in _gameStateInfo.PlayerInfos)
+                playerInfo.NetWorth = _serverGameStateInfo.InitNetWorth;
         }
 
     }

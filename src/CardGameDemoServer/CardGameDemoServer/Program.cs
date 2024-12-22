@@ -6,7 +6,7 @@ namespace CardGameDemoServer
     {
         public static void Main(string[] args)
         {
-            var server = new GameServer(8800, false, ["aaa"], 500, 30 * 1000);
+            var server = new GameServer(8800, false, ["bbb", "aaa"], 500, 10 * 60 * 1000);
             server.Start();
 
             var cancelled = false;

@@ -113,17 +113,56 @@ public class GameplayController : MonoBehaviour
             var playerInfo = gameStateInfo.PlayerInfos[curId++ % playerCount];
             _localGameStateInfo.PlayerInfos.Add(playerInfo);
         }
-        _localGameStateInfo.Dealer = (gameStateInfo.Dealer - gameStateInfo.PlayerId) % playerCount;
-        _localGameStateInfo.Aggressor = (gameStateInfo.Aggressor - gameStateInfo.PlayerId) % playerCount;
-        _localGameStateInfo.ActivePlayer = (gameStateInfo.ActivePlayer - gameStateInfo.PlayerId) % playerCount;
+        _localGameStateInfo.Dealer = (gameStateInfo.Dealer - gameStateInfo.PlayerId + playerCount) % playerCount;
+        _localGameStateInfo.Aggressor = (gameStateInfo.Aggressor - gameStateInfo.PlayerId + playerCount) % playerCount;
+        _localGameStateInfo.ActivePlayer = (gameStateInfo.ActivePlayer - gameStateInfo.PlayerId + playerCount) % playerCount;
 
         // set global state
-        DealerText.text = _localGameStateInfo.PlayerInfos[_localGameStateInfo.Dealer].Name;
-        AggressorText.text = _localGameStateInfo.PlayerInfos[_localGameStateInfo.Aggressor].Name;
-        ActivePlayerText.text = _localGameStateInfo.PlayerInfos[_localGameStateInfo.ActivePlayer].Name;
+        var dealer = _localGameStateInfo.Dealer;
+        if (dealer >= 0)
+            DealerText.text = _localGameStateInfo.PlayerInfos[dealer].Name;
+        var aggressor = _localGameStateInfo.Aggressor;
+        if (aggressor >= 0)
+            AggressorText.text = _localGameStateInfo.PlayerInfos[aggressor].Name;
+        var activePlayer = _localGameStateInfo.ActivePlayer;
+        if (activePlayer >= 0)
+        ActivePlayerText.text = _localGameStateInfo.PlayerInfos[activePlayer].Name;
         SetTimer();
 
-        // TODO: hide or show player info panels
+        // TODO: handle different state using dedicated classes
+        if (_localGameStateInfo.CurrentState == GameState.WaitingForPlayers)
+        {
+            InstructionText.text = "waiting for other players to join...";
+        }
+        else if (_localGameStateInfo.CurrentState == GameState.PlayersTurn)
+        {
+            UpdateGeneralActionList();
+            if (activePlayer == 0)
+                InstructionText.text = "your turn";
+            else
+                InstructionText.text = $"waiting for {_localGameStateInfo.PlayerInfos[activePlayer].Name}...";
+        }
+        else if (_localGameStateInfo.CurrentState == GameState.RoundResult)
+        {
+            PlayerInfo winnerInfo = null;
+            RoundResultStateData winnerRoundRst = null;
+            foreach (var playerInfo in _localGameStateInfo.PlayerInfos)
+            {
+                var roundRst = RoundResultStateData.From(playerInfo.StateData);
+                if (roundRst.IsWinner)
+                {
+                    winnerInfo = playerInfo;
+                    winnerRoundRst = roundRst;
+                    break;
+                }
+            }
+            InstructionText.text = $"round end, the winner is {winnerInfo.Name} "
+                + $"with hand: {string.Join(',', winnerRoundRst.Hand)}";
+        }
+        else if (_localGameStateInfo.CurrentState == GameState.MatchResult)
+        {
+            InstructionText.text = "match ended";
+        }
 
         // set player state
         if (_localGameStateInfo.PlayerInfos.Count > 0)
@@ -133,7 +172,6 @@ public class GameplayController : MonoBehaviour
             Player0BetText.text = _localGameStateInfo.PlayerInfos[0].Bet.ToString();
             Player0IsFoldedText.text = _localGameStateInfo.PlayerInfos[0].IsFolded.ToString();
             UpdateMainHand(_localGameStateInfo.PlayerInfos[0].MainHand);
-            UpdateGeneralActionList();
         }
         if (_localGameStateInfo.PlayerInfos.Count > 1)
         {

@@ -21,6 +21,11 @@ namespace CardGameDemoServer.States
             UpdateGameStateForClients();
         }
 
+        protected override void OnUpdate()
+        {
+            // TODO: shutdown
+        }
+
         protected override void OnLeave()
         {
         }
@@ -30,5 +35,6 @@ namespace CardGameDemoServer.States
             requestDoneCallback = null;
             return null;
         }
+
     }
 }

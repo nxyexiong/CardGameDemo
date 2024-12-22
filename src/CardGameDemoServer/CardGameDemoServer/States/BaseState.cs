@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using Newtonsoft.Json;
 using CardGameDemoServer.Common;
 using CardGameDemoServer.Networking;
+using CardGameDemoServer.GameLogic;
 
 namespace CardGameDemoServer.States
 {
@@ -32,6 +33,11 @@ namespace CardGameDemoServer.States
         {
             Console.WriteLine($"[+] enter state {GetType().Name}");
             OnEnter(data);
+        }
+
+        public void Update()
+        {
+            OnUpdate();
         }
 
         public void Leave()
@@ -67,6 +73,8 @@ namespace CardGameDemoServer.States
         }
 
         protected abstract void OnEnter(object? data);
+
+        protected abstract void OnUpdate();
 
         protected abstract void OnLeave();
 
@@ -108,7 +116,7 @@ namespace CardGameDemoServer.States
                 if (i != playerId)
                 {
                     sendGameStateInfo.PlayerInfos[i].MainHand.Clear();
-                    sendGameStateInfo.PlayerInfos[i].StateData = string.Empty;
+                    sendGameStateInfo.PlayerInfos[i].HiddenStateData = string.Empty;
                 }
             }
 
@@ -151,10 +159,8 @@ namespace CardGameDemoServer.States
                     {
                         InitNewRound(0);
                         Next(GameState.PlayersTurn, null);
-                        return;
                     }
                 }
-                UpdateGameStateForClients();
             };
 
             return JsonConvert.SerializeObject(new HandshakeResponse { Success = true });
@@ -163,38 +169,37 @@ namespace CardGameDemoServer.States
         protected void InitNewRound(int dealer)
         {
             _serverGameStateInfo.CardPile.Init();
+            _serverGameStateInfo.CardPile.Shuffle();
             _serverGameStateInfo.IsAggressorsFirstTurn = true;
 
             _gameStateInfo.Dealer = dealer;
             _gameStateInfo.Aggressor = dealer;
             _gameStateInfo.ActivePlayer = dealer;
-            ResetTimer();
 
             for (var playerId = 0; playerId < _gameStateInfo.PlayerInfos.Count; playerId++)
             {
                 var playerInfo = _gameStateInfo.PlayerInfos[playerId];
-                playerInfo.NetWorth = _serverGameStateInfo.InitNetWorth;
                 playerInfo.Bet = 5;
                 playerInfo.IsFolded = false;
                 playerInfo.MainHand = [];
-                for (var i = 0; i < 3; i++)
+                var cardList = new List<PokerCard>
                 {
-                    var card = _serverGameStateInfo.CardPile.Draw();
-                    if (card == null)
-                    {
-                        Console.WriteLine("[-] init new round cannot draw card");
-                        break;
-                    }
+                    _serverGameStateInfo.CardPile.Draw()!,
+                    _serverGameStateInfo.CardPile.Draw()!,
+                    _serverGameStateInfo.CardPile.Draw()!,
+                };
+                cardList.Sort();
+                foreach (var card in cardList)
                     playerInfo.MainHand.Add(card.RawData());
-                }
                 playerInfo.StateData = string.Empty;
+                playerInfo.HiddenStateData = string.Empty;
             }
         }
 
-        protected void ResetTimer()
+        protected void ResetTimer(int intervalMs)
         {
             _gameStateInfo.TimerStartTimestampMs = TimeUtils.GetTimestampMs(DateTime.Now);
-            _gameStateInfo.TimerIntervalMs = _serverGameStateInfo.TurnTimeMs;
+            _gameStateInfo.TimerIntervalMs = intervalMs;
         }
 
     }

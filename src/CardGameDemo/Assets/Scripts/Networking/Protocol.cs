@@ -239,6 +239,7 @@ namespace Networking
         public bool IsFolded { get; set; } = false;
         public List<string> MainHand { get; set; } = new List<string>();
         public string StateData { get; set; } = string.Empty;
+        public string HiddenStateData { get; set; } = string.Empty;
 
         public PlayerInfo Copy()
         {
@@ -250,6 +251,7 @@ namespace Networking
                 IsFolded = IsFolded,
                 MainHand = new List<string>(),
                 StateData = StateData,
+                HiddenStateData = HiddenStateData,
             };
 
             foreach (var card in MainHand)
@@ -282,6 +284,23 @@ namespace Networking
         public static RaiseBetData From(string rawData)
         {
             return JsonConvert.DeserializeObject<RaiseBetData>(rawData) ??
+                throw new InvalidDataException("json parse failed");
+        }
+
+        public string RawData()
+        {
+            return JsonConvert.SerializeObject(this);
+        }
+    }
+
+    public class RoundResultStateData
+    {
+        public bool IsWinner { get; set; } = false;
+        public List<string> Hand { get; set; } = new List<string>();
+
+        public static RoundResultStateData From(string rawData)
+        {
+            return JsonConvert.DeserializeObject<RoundResultStateData>(rawData) ??
                 throw new InvalidDataException("json parse failed");
         }
 

@@ -2,6 +2,7 @@
 using System.Net.Sockets;
 using Newtonsoft.Json;
 using CardGameDemoServer.Networking;
+using CardGameDemoServer.Common;
 
 namespace CardGameDemoServer.States
 {
@@ -21,6 +22,13 @@ namespace CardGameDemoServer.States
         {
             UpdateStateData();
             UpdateGameStateForClients();
+        }
+
+        protected override void OnUpdate()
+        {
+            var nowMs = TimeUtils.GetTimestampMs(DateTime.Now);
+            if (nowMs >= _gameStateInfo.TimerStartTimestampMs + _gameStateInfo.TimerIntervalMs)
+                FoldCurrentPlayer();
         }
 
         protected override void OnLeave()
@@ -76,33 +84,51 @@ namespace CardGameDemoServer.States
 
             if (action == GeneralAction.FollowBet)
             {
+                var highestBet = 0;
+                for (var i = 0; i < _gameStateInfo.PlayerInfos.Count; i++)
+                    if (_gameStateInfo.PlayerInfos[i].Bet > highestBet)
+                        highestBet = _gameStateInfo.PlayerInfos[i].Bet;
+                playerInfo.Bet = highestBet;
             }
             else if (action == GeneralAction.RaiseBet)
             {
+                var highestBet = 0;
+                for (var i = 0; i < _gameStateInfo.PlayerInfos.Count; i++)
+                    if (_gameStateInfo.PlayerInfos[i].Bet > highestBet)
+                        highestBet = _gameStateInfo.PlayerInfos[i].Bet;
+
                 var raiseBetData = RaiseBetData.From(data);
                 if (raiseBetData.Bet <= 0 ||
                     (raiseBetData.Bet % 5) != 0 ||
-                    raiseBetData.Bet > playerInfo.NetWorth - playerInfo.Bet)
+                    highestBet + raiseBetData.Bet > playerInfo.NetWorth)
                 {
                     Console.WriteLine($"[-] player id {playerId} invalid raise bet amount {raiseBetData.Bet}");
                     return;
                 }
-                playerInfo.Bet += raiseBetData.Bet;
+                playerInfo.Bet = highestBet + raiseBetData.Bet;
                 _gameStateInfo.Aggressor = playerId;
             }
             else if (action == GeneralAction.Fold)
             {
                 playerInfo.IsFolded = true;
+
+                var unfoldPlayerCount = 0;
+                foreach (var info in _gameStateInfo.PlayerInfos)
+                    if (!info.IsFolded)
+                        unfoldPlayerCount++;
+                if (unfoldPlayerCount <= 1)
+                {
+                    Next(GameState.RoundResult, null);
+                    return;
+                }
             }
             else if (action == GeneralAction.Showdown)
             {
-                // TODO: calculate result
                 Next(GameState.RoundResult, null);
                 return;
             }
 
             _gameStateInfo.ActivePlayer = (_gameStateInfo.ActivePlayer + 1) % playerCount;
-            ResetTimer();
             Next(GameState.PlayersTurn, null);
         }
 
@@ -154,6 +180,16 @@ namespace CardGameDemoServer.States
 
                 playerInfo.StateData = stateData.RawData();
             }
+
+            ResetTimer(_serverGameStateInfo.TurnTimeMs);
+        }
+
+        private void FoldCurrentPlayer()
+        {
+            var playerCount = _gameStateInfo.PlayerInfos.Count;
+            _gameStateInfo.PlayerInfos[_gameStateInfo.ActivePlayer].IsFolded = true;
+            _gameStateInfo.ActivePlayer = (_gameStateInfo.ActivePlayer + 1) % playerCount;
+            Next(GameState.PlayersTurn, null);
         }
 
     }
