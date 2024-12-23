@@ -8,26 +8,36 @@ namespace CardGameDemoServer.GameLogic
 {
     internal class PokerCardPile
     {
-        private static readonly Random _rng = new();
         private List<PokerCard> _pile = [];
 
-        public void Init(bool haveJoker = false)
+        public void Init(int deckCount = 1, bool haveJoker = false)
         {
-            foreach (var suit in PokerCard.SuitOrder)
+            _pile.Clear();
+            for (var i = 0; i < deckCount; i++)
             {
-                foreach (var rank in PokerCard.RankOrder)
+                foreach (var suit in PokerCard.SuitOrder)
                 {
-                    if (rank == 'Z' && !haveJoker) continue;
-                    if (rank == 'Z' && suit != 'R' && suit != 'B') continue;
-                    if (rank != 'Z' && (suit == 'R' || suit == 'B')) continue;
-                    _pile.Add(new PokerCard { Rank = $"{rank}", Suit = $"{suit}" });
+                    foreach (var rank in PokerCard.RankOrder)
+                    {
+                        if (rank == 'Z' && !haveJoker) continue;
+                        if (rank == 'Z' && suit != 'R' && suit != 'B') continue;
+                        if (rank != 'Z' && (suit == 'R' || suit == 'B')) continue;
+                        _pile.Add(new PokerCard { Rank = $"{rank}", Suit = $"{suit}" });
+                    }
                 }
             }
         }
 
         public void Shuffle()
         {
-            _pile = _pile.OrderBy(_ => _rng.Next()).ToList();
+            var random = new Random();
+            for (var i = _pile.Count - 1; i > 1; i--)
+            {
+                var rnd = random.Next(i + 1);
+                var value = _pile[rnd];
+                _pile[rnd] = _pile[i];
+                _pile[i] = value;
+            }
         }
 
         public int Count()
@@ -37,9 +47,13 @@ namespace CardGameDemoServer.GameLogic
 
         public PokerCard? Draw()
         {
-            var ret = _pile.FirstOrDefault();
-            if (ret != null) _pile.Remove(ret);
-            return ret;
+            if (Count() > 0)
+            {
+                var ret = _pile[0];
+                _pile.RemoveAt(0);
+                return ret;
+            }
+            return null;
         }
     }
 }

@@ -159,8 +159,10 @@ namespace CardGameDemoServer.States
                     {
                         InitNewRound(0);
                         Next(GameState.PlayersTurn, null);
+                        return;
                     }
                 }
+                UpdateGameStateForClients();
             };
 
             return JsonConvert.SerializeObject(new HandshakeResponse { Success = true });
@@ -168,7 +170,7 @@ namespace CardGameDemoServer.States
 
         protected void InitNewRound(int dealer)
         {
-            _serverGameStateInfo.CardPile.Init();
+            _serverGameStateInfo.CardPile.Init(_serverGameStateInfo.DeckCount, false);
             _serverGameStateInfo.CardPile.Shuffle();
             _serverGameStateInfo.IsAggressorsFirstTurn = true;
 
@@ -182,11 +184,12 @@ namespace CardGameDemoServer.States
                 playerInfo.Bet = 5;
                 playerInfo.IsFolded = false;
                 playerInfo.MainHand = [];
-                var cardList = new List<PokerCard>
+                var cardList = new List<PokerCard>();
+                for (var i = 0; i < 3; i++)
                 {
-                    _serverGameStateInfo.CardPile.Draw()!,
-                    _serverGameStateInfo.CardPile.Draw()!,
-                    _serverGameStateInfo.CardPile.Draw()!,
+                    var card = _serverGameStateInfo.CardPile.Draw() ??
+                        throw new InvalidOperationException("cannot draw card");
+                    cardList.Add(card);
                 };
                 cardList.Sort();
                 foreach (var card in cardList)
@@ -194,6 +197,8 @@ namespace CardGameDemoServer.States
                 playerInfo.StateData = string.Empty;
                 playerInfo.HiddenStateData = string.Empty;
             }
+
+            Console.WriteLine($"[+] init new round complete: {JsonConvert.SerializeObject(_gameStateInfo)}");
         }
 
         protected void ResetTimer(int intervalMs)

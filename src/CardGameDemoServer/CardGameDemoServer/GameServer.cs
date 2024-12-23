@@ -12,6 +12,8 @@ namespace CardGameDemoServer
     {
         public int InitNetWorth { get; set; } = -1;
         public int TurnTimeMs { get; set; } = 30 * 1000;
+        public int MaxBet { get; set; } = 50;
+        public int DeckCount { get; set; } = 1;
         public PokerCardPile CardPile { get; set; } = new();
         public bool IsAggressorsFirstTurn { get; set; } = true;
     }
@@ -47,7 +49,9 @@ namespace CardGameDemoServer
             bool isIpv6 = false,
             IEnumerable<string>? profileIds = null,
             int initNetWorth = 500,
-            int turnTimeMs = 30 * 1000)
+            int turnTimeMs = 30 * 1000,
+            int maxBet = 50,
+            int deckCount = 1)
         {
             _port = port;
             _isIpv6 = isIpv6;
@@ -59,6 +63,8 @@ namespace CardGameDemoServer
             {
                 InitNetWorth = initNetWorth,
                 TurnTimeMs = turnTimeMs,
+                MaxBet = maxBet,
+                DeckCount = deckCount,
             };
             _gameStateInfo = new();
             _clients = [];

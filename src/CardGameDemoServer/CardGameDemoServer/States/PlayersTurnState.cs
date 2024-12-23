@@ -84,39 +84,25 @@ namespace CardGameDemoServer.States
 
             if (action == GeneralAction.FollowBet)
             {
-                var highestBet = 0;
-                for (var i = 0; i < _gameStateInfo.PlayerInfos.Count; i++)
-                    if (_gameStateInfo.PlayerInfos[i].Bet > highestBet)
-                        highestBet = _gameStateInfo.PlayerInfos[i].Bet;
-                playerInfo.Bet = highestBet;
+                playerInfo.Bet = GetHighestBet();
             }
             else if (action == GeneralAction.RaiseBet)
             {
-                var highestBet = 0;
-                for (var i = 0; i < _gameStateInfo.PlayerInfos.Count; i++)
-                    if (_gameStateInfo.PlayerInfos[i].Bet > highestBet)
-                        highestBet = _gameStateInfo.PlayerInfos[i].Bet;
-
                 var raiseBetData = RaiseBetData.From(data);
                 if (raiseBetData.Bet <= 0 ||
                     (raiseBetData.Bet % 5) != 0 ||
-                    highestBet + raiseBetData.Bet > playerInfo.NetWorth)
+                    raiseBetData.Bet > MaxRaiseAmount())
                 {
                     Console.WriteLine($"[-] player id {playerId} invalid raise bet amount {raiseBetData.Bet}");
                     return;
                 }
-                playerInfo.Bet = highestBet + raiseBetData.Bet;
+                playerInfo.Bet = GetHighestBet() + raiseBetData.Bet;
                 _gameStateInfo.Aggressor = playerId;
             }
             else if (action == GeneralAction.Fold)
             {
                 playerInfo.IsFolded = true;
-
-                var unfoldPlayerCount = 0;
-                foreach (var info in _gameStateInfo.PlayerInfos)
-                    if (!info.IsFolded)
-                        unfoldPlayerCount++;
-                if (unfoldPlayerCount <= 1)
+                if (IsRoundEndByFolding())
                 {
                     Next(GameState.RoundResult, null);
                     return;
@@ -134,10 +120,6 @@ namespace CardGameDemoServer.States
 
         private void UpdateStateData()
         {
-            var highestBet = 0;
-            for (var playerId = 0; playerId < _gameStateInfo.PlayerInfos.Count; playerId++)
-                if (_gameStateInfo.PlayerInfos[playerId].Bet > highestBet)
-                    highestBet = _gameStateInfo.PlayerInfos[playerId].Bet;
 
             for (var playerId = 0; playerId < _gameStateInfo.PlayerInfos.Count; playerId++)
             {
@@ -151,7 +133,6 @@ namespace CardGameDemoServer.States
                         if (_serverGameStateInfo.IsAggressorsFirstTurn)
                         {
                             // aggressor's first turn
-                            stateData.GeneralActions.Add(GeneralAction.FollowBet);
                             stateData.GeneralActions.Add(GeneralAction.RaiseBet);
                             stateData.GeneralActions.Add(GeneralAction.Fold);
                             _serverGameStateInfo.IsAggressorsFirstTurn = false;
@@ -159,16 +140,16 @@ namespace CardGameDemoServer.States
                         else
                         {
                             // aggressor's second turn
-                            stateData.GeneralActions.Add(GeneralAction.RaiseBet);
+                            if (MaxRaiseAmount() > 0)
+                                stateData.GeneralActions.Add(GeneralAction.RaiseBet);
                             stateData.GeneralActions.Add(GeneralAction.Showdown);
                         }
                     }
                     else
                     {
                         // non agressor
-                        if (highestBet <= playerInfo.NetWorth)
-                            stateData.GeneralActions.Add(GeneralAction.FollowBet);
-                        if (highestBet < playerInfo.NetWorth)
+                        stateData.GeneralActions.Add(GeneralAction.FollowBet);
+                        if (MaxRaiseAmount() > 0)
                             stateData.GeneralActions.Add(GeneralAction.RaiseBet);
                         stateData.GeneralActions.Add(GeneralAction.Fold);
                     }
@@ -184,12 +165,51 @@ namespace CardGameDemoServer.States
             ResetTimer(_serverGameStateInfo.TurnTimeMs);
         }
 
+        private int GetHighestBet()
+        {
+            var highestBet = 0;
+            for (var i = 0; i < _gameStateInfo.PlayerInfos.Count; i++)
+                if (_gameStateInfo.PlayerInfos[i].Bet > highestBet)
+                    highestBet = _gameStateInfo.PlayerInfos[i].Bet;
+            return highestBet;
+        }
+
+        private int MaxRaiseAmount()
+        {
+            var highestBet = GetHighestBet();
+            var ret = _serverGameStateInfo.MaxBet - highestBet;
+            for (var i = 0; i < _gameStateInfo.PlayerInfos.Count; i++)
+            {
+                if (ret > _gameStateInfo.PlayerInfos[i].NetWorth - highestBet)
+                    ret = _gameStateInfo.PlayerInfos[i].NetWorth - highestBet;
+            }
+            return ret;
+        }
+
         private void FoldCurrentPlayer()
         {
             var playerCount = _gameStateInfo.PlayerInfos.Count;
             _gameStateInfo.PlayerInfos[_gameStateInfo.ActivePlayer].IsFolded = true;
+
+            if (IsRoundEndByFolding())
+            {
+                Next(GameState.RoundResult, null);
+                return;
+            }
+
             _gameStateInfo.ActivePlayer = (_gameStateInfo.ActivePlayer + 1) % playerCount;
             Next(GameState.PlayersTurn, null);
+        }
+
+        private bool IsRoundEndByFolding()
+        {
+            var unfoldPlayerCount = 0;
+            foreach (var info in _gameStateInfo.PlayerInfos)
+                if (!info.IsFolded)
+                    unfoldPlayerCount++;
+            if (unfoldPlayerCount <= 1)
+                return true;
+            return false;
         }
 
     }

@@ -112,7 +112,7 @@ namespace CardGameDemoServer.States
         {
             foreach (var playerInfo in _gameStateInfo.PlayerInfos)
             {
-                if (playerInfo.NetWorth <= 0)
+                if (playerInfo.NetWorth <= 5)
                     return true;
             }
             return false;

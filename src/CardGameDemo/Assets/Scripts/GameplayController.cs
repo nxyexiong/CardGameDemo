@@ -94,6 +94,7 @@ public class GameplayController : MonoBehaviour
 
         // sync time
         _tsDelta = request.ServerTimestampMs - Common.TimeUtils.GetTimestampMs(DateTime.Now);
+        SetTimer();
 
         // update game state
         UpdateGameState(request.GameStateInfo);
@@ -127,11 +128,11 @@ public class GameplayController : MonoBehaviour
         var activePlayer = _localGameStateInfo.ActivePlayer;
         if (activePlayer >= 0)
         ActivePlayerText.text = _localGameStateInfo.PlayerInfos[activePlayer].Name;
-        SetTimer();
 
         // TODO: handle different state using dedicated classes
         if (_localGameStateInfo.CurrentState == GameState.WaitingForPlayers)
         {
+            ClearGeneralActionList();
             InstructionText.text = "waiting for other players to join...";
         }
         else if (_localGameStateInfo.CurrentState == GameState.PlayersTurn)
@@ -144,6 +145,8 @@ public class GameplayController : MonoBehaviour
         }
         else if (_localGameStateInfo.CurrentState == GameState.RoundResult)
         {
+            ClearGeneralActionList();
+
             PlayerInfo winnerInfo = null;
             RoundResultStateData winnerRoundRst = null;
             foreach (var playerInfo in _localGameStateInfo.PlayerInfos)
@@ -161,6 +164,7 @@ public class GameplayController : MonoBehaviour
         }
         else if (_localGameStateInfo.CurrentState == GameState.MatchResult)
         {
+            ClearGeneralActionList();
             InstructionText.text = "match ended";
         }
 
@@ -199,7 +203,7 @@ public class GameplayController : MonoBehaviour
     private void SetTimer()
     {
         var nowMs = Common.TimeUtils.GetTimestampMs(DateTime.Now);
-        var startTimeMs = _localGameStateInfo.TimerStartTimestampMs;
+        var startTimeMs = _localGameStateInfo.TimerStartTimestampMs - _tsDelta;
         var intervalMs = _localGameStateInfo.TimerIntervalMs;
         var timeLeftMs = startTimeMs + intervalMs - nowMs;
 
@@ -294,11 +298,16 @@ public class GameplayController : MonoBehaviour
             actionBtn.GetComponent<Button>().onClick.AddListener(() =>
             {
                 OnActionButtonClick(actionBtn);
-                foreach (var btn in _actions)
-                    Destroy(btn);
-                _actions.Clear();
+                ClearGeneralActionList();
             });
         }
+    }
+
+    private void ClearGeneralActionList()
+    {
+        foreach (var btn in _actions)
+            Destroy(btn);
+        _actions.Clear();
     }
 
     private string GetGeneralActionButtonText(GeneralAction action)

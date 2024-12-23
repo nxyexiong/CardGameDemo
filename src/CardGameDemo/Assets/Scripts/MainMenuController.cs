@@ -13,6 +13,9 @@ public class MainMenuController : MonoBehaviour
 
     void Start()
     {
+        // run in background
+        Application.runInBackground = true;
+
         // add listeners
         StartClosedGameButton.onClick.AddListener(() =>
         {
