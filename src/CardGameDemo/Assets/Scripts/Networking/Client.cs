@@ -21,8 +21,9 @@ namespace Networking
 
         void Start()
         {
+            var ip = PlayerPrefs.GetString("ServerIp") ?? string.Empty;
             _socket = new SocketClient();
-            _socket.Connect("127.0.0.1", 8800, false, (connected) =>
+            _socket.Connect(ip, 8800, false, (connected) =>
             {
                 _connected = connected;
                 _connectionStatusCallback?.Invoke(_connected);
